@@ -1,0 +1,7 @@
+import { StyleSheet, type ViewStyle } from "react-native";
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  } satisfies ViewStyle,
+});
