@@ -12,8 +12,10 @@ export default function MainLayout() {
   return (
     <TabSwipeArea>
       <Tabs
+        detachInactiveScreens={false}
         screenOptions={{
           headerShown: false,
+          lazy: false,
           animation: reduceMotion ? "none" : "shift",
           transitionSpec: {
             animation: "timing",

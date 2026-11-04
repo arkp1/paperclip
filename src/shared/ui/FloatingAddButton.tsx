@@ -55,6 +55,7 @@ export function FloatingAddButton({
       accessibilityLabel="Save a link"
       onPress={onPress}
       scaleTo={0.94}
+      inkColor={theme.colors.onPrimary}
       style={[
         styles.fab,
         {

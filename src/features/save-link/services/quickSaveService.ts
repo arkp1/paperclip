@@ -3,6 +3,7 @@ import {
   findBookmarkByUrl,
 } from "@/features/bookmarks/data/bookmarkRepository";
 import { refreshBookmarkPreview } from "@/features/bookmarks/services/previewService";
+import { cacheArticleInBackground } from "@/features/reader/services/articleService";
 import { validateHttpUrl } from "@/shared/utils/url";
 
 export type QuickSaveResult =
@@ -43,6 +44,7 @@ export async function quickSaveLink(rawUrl: string): Promise<QuickSaveResult> {
     void refreshBookmarkPreview(saved.id).catch(() => {
       // The link is saved even if enrichment fails.
     });
+    void cacheArticleInBackground(saved.id);
 
     return { status: "saved", bookmarkId: saved.id };
   } catch (error) {

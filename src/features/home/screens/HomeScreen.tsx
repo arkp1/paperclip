@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
+import { refreshMissingPreviews } from "@/features/bookmarks/services/previewService";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
 import { FolderCard } from "@/features/folders/components/FolderCard";
 import type { Folder } from "@/features/folders/types";
@@ -59,12 +61,16 @@ export function HomeScreen() {
     [router]
   );
 
-  const openBookmark = useCallback((bookmark: Bookmark) => {
-    void openExternalUrl(bookmark.originalUrl);
-  }, []);
+  const openBookmark = useCallback(
+    (bookmark: Bookmark) => {
+      openBookmarkDestination(bookmark, router);
+    },
+    [router]
+  );
 
   const refreshAll = useCallback(async () => {
     await Promise.all([refreshFolders(), refreshBookmarks()]);
+    await refreshMissingPreviews();
   }, [refreshBookmarks, refreshFolders]);
 
   return (

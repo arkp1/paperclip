@@ -133,6 +133,7 @@ export function FoldersScreen() {
               icon="plus"
               label="Create folder"
               onPress={() => setCreateVisible(true)}
+              inkColor={theme.colors.primary}
             />
           </>
         }

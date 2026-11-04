@@ -1,9 +1,11 @@
 import { SegmentedControl } from "@expo/ui/community/segmented-control";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { ScrollView, Switch, View } from "react-native";
+import { Switch } from "@expo/ui/jetpack-compose";
+import { ScrollView, View } from "react-native";
 
 import { AppText } from "@/shared/ui/AppText";
+import { MaterialHost } from "@/shared/ui/MaterialHost";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
@@ -124,16 +126,12 @@ export function SettingsScreen() {
                   Use a pure black background whenever the dark theme is active.
                 </AppText>
               </View>
-              <Switch
-                value={amoled}
-                onValueChange={setAmoled}
-                trackColor={{
-                  false: theme.colors.surfaceContainerHigh,
-                  true: theme.colors.primary,
-                }}
-                thumbColor={theme.colors.onPrimary}
-                accessibilityLabel="AMOLED black background"
-              />
+              <MaterialHost matchContents>
+                <Switch
+                  value={amoled}
+                  onCheckedChange={setAmoled}
+                />
+              </MaterialHost>
             </View>
           </View>
         </View>

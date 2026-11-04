@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, type StyleProp, type ViewStyle } from "react-native";
 
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
+import { motion } from "@/theme";
 
 type AnimatedLayoutChangeProps = {
   transitionKey: string;
@@ -32,7 +33,7 @@ export function AnimatedLayoutChange({
     progress.setValue(0);
     Animated.timing(progress, {
       toValue: 1,
-      duration: 150,
+      duration: motion.standard,
       useNativeDriver: true,
     }).start();
   }, [progress, reduceMotion, transitionKey]);

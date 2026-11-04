@@ -124,7 +124,6 @@ export function BookmarkActionsDialog({
     try {
       await Clipboard.setStringAsync(bookmark.originalUrl);
       closeAll();
-      Alert.alert("Link copied", "The URL is on your clipboard.");
     } catch {
       Alert.alert("Could not copy the link", "Please try again.");
     }

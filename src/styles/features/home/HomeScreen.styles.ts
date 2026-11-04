@@ -51,6 +51,7 @@ export const styles = StyleSheet.create({
   horizontalContent: {
     gap: spacing[3],
     paddingRight: spacing[6],
+    paddingVertical: spacing[3],
   },
   folderSlide: {
     width: 220,

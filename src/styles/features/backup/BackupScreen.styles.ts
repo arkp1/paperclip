@@ -9,7 +9,7 @@ export const styles = StyleSheet.create({
     gap: spacing[5],
   },
   hero: {
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     padding: spacing[5],
     gap: spacing[2],

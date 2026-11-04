@@ -37,6 +37,8 @@ Implemented:
   folder summary header.
 - Versioned public JSON export/import with folders, links, notes, favourites,
   and cached preview images. Private folders are excluded.
+- Distraction-free article reader with a cached offline copy and Android
+  text-to-speech playback.
 - Bookmark details screen with full preview, description, note, folder/source
   metadata, open/copy actions, and the shared action menu.
 - Platform-aware metadata: YouTube oEmbed and Reddit's social-crawler Open

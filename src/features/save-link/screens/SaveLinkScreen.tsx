@@ -14,6 +14,7 @@ import {
   findBookmarkByUrl,
 } from "@/features/bookmarks/data/bookmarkRepository";
 import { enrichBookmarkPreview } from "@/features/bookmarks/services/previewService";
+import { cacheArticleInBackground } from "@/features/reader/services/articleService";
 import type { Bookmark, PreviewStatus } from "@/features/bookmarks/types";
 import { FolderPickerDialog } from "@/features/folders/components/FolderPickerDialog";
 import { useFolders } from "@/features/folders/hooks/useFolders";
@@ -181,6 +182,7 @@ export function SaveLinkScreen() {
       });
 
       await enrichBookmarkPreview(saved.id, metadata?.imageUrl ?? null);
+      void cacheArticleInBackground(saved.id);
 
       if (folderId) {
         router.replace({

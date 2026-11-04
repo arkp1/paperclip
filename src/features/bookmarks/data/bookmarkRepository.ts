@@ -168,6 +168,32 @@ export async function getPublicBookmarkById(
     : null;
 }
 
+/**
+ * Reader access: public bookmarks always, private bookmarks only while the
+ * private-space session is unlocked.
+ */
+export async function getReadableBookmarkById(
+  id: string
+): Promise<Bookmark | null> {
+  const bookmark = await getBookmarkById(id);
+  if (!bookmark) {
+    return null;
+  }
+
+  if (bookmark.folderId) {
+    const database = await getDatabase();
+    const folder = await database.getFirstAsync<{ isPrivate: number }>(
+      "SELECT is_private AS isPrivate FROM folders WHERE id = ?",
+      bookmark.folderId
+    );
+    if (folder?.isPrivate === 1 && !isPrivateSpaceUnlocked()) {
+      return null;
+    }
+  }
+
+  return bookmark;
+}
+
 export async function listBookmarksInFolder(
   folderId: string,
   sort: BookmarkSortMode = "recent"

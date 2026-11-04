@@ -91,6 +91,22 @@ const migrations: Migration[] = [
         ON bookmarks(is_favorite, created_at DESC);
     `,
   },
+  {
+    version: 3,
+    name: "article_cache",
+    sql: `
+      CREATE TABLE IF NOT EXISTS article_contents (
+        bookmark_id TEXT PRIMARY KEY NOT NULL,
+        blocks TEXT NOT NULL,
+        word_count INTEGER NOT NULL DEFAULT 0,
+        fetched_at INTEGER NOT NULL,
+        FOREIGN KEY (bookmark_id)
+          REFERENCES bookmarks(id)
+          ON UPDATE CASCADE
+          ON DELETE CASCADE
+      );
+    `,
+  },
 ];
 
 /**

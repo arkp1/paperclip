@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, View } from "react-native";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { BookmarkSortDialog } from "@/features/bookmarks/components/BookmarkSortDialog";
 import { BookmarkViewSelector } from "@/features/bookmarks/components/BookmarkViewSelector";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import type { Bookmark, BookmarkViewMode } from "@/features/bookmarks/types";
 import { BOOKMARK_VIEW_MODES } from "@/features/bookmarks/types";
 import { useBookmarkSortMode } from "@/features/bookmarks/hooks/useBookmarkSortMode";
 import { useBookmarkViewMode } from "@/features/bookmarks/hooks/useBookmarkViewMode";
 import { useFolderBookmarks } from "@/features/bookmarks/hooks/useFolderBookmarks";
+import { refreshMissingPreviews } from "@/features/bookmarks/services/previewService";
 import {
   unlockPrivateSpace,
   usePrivateSpaceSession,
@@ -63,6 +65,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const { viewMode, setViewMode } = useBookmarkViewMode();
   const [viewDirection, setViewDirection] = useState<1 | -1>(1);
+  const [refreshing, setRefreshing] = useState(false);
   const { isUnlocked } = usePrivateSpaceSession();
 
   useEffect(() => {
@@ -104,6 +107,16 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await reloadBookmarks();
+      await refreshMissingPreviews();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleViewModeChange = useCallback(
     (nextMode: BookmarkViewMode) => {
       const nextIndex = BOOKMARK_VIEW_MODES.indexOf(nextMode);
@@ -114,9 +127,12 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     [setViewMode, viewMode]
   );
 
-  const openBookmark = useCallback((bookmark: Bookmark) => {
-    void openExternalUrl(bookmark.originalUrl);
-  }, []);
+  const openBookmark = useCallback(
+    (bookmark: Bookmark) => {
+      openBookmarkDestination(bookmark, router);
+    },
+    [router]
+  );
 
   const handleRename = async (
     name: string,
@@ -208,6 +224,14 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
           windowSize={7}
           updateCellsBatchingPeriod={50}
           removeClippedSubviews
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                void handleRefresh();
+              }}
+            />
+          }
           contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset }]}
           ListEmptyComponent={
             bookmarksStatus === "loading" ? (

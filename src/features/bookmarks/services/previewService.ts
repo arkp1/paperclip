@@ -1,3 +1,4 @@
+import { getDatabase } from "@/core/database/database";
 import {
   getBookmarkById,
   deleteBookmark,
@@ -93,5 +94,33 @@ export async function deleteBookmarkWithAssets(bookmarkId: string): Promise<void
 
   if (bookmark?.previewImagePath) {
     deletePreviewImage(bookmark.previewImagePath);
+  }
+}
+
+/**
+ * Refreshes a bounded batch of public bookmarks whose previews are missing or
+ * incomplete. Pull-to-refresh uses this so a restored library can repopulate
+ * thumbnails without opening each item.
+ */
+export async function refreshMissingPreviews(limit = 30): Promise<void> {
+  const database = await getDatabase();
+  const rows = await database.getAllAsync<{ id: string }>(
+    `SELECT b.id
+     FROM bookmarks b
+     LEFT JOIN folders f ON f.id = b.folder_id
+     WHERE (f.is_private IS NULL OR f.is_private = 0)
+       AND (
+         b.preview_image_path IS NULL
+         OR b.preview_status IN ('pending', 'partial', 'failed')
+       )
+     ORDER BY b.created_at DESC
+     LIMIT ?`,
+    limit
+  );
+
+  for (const row of rows) {
+    await refreshBookmarkPreview(row.id).catch(() => {
+      // One failed preview must not stop the rest of the refresh.
+    });
   }
 }

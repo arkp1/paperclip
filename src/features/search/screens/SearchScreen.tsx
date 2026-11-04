@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
 import { useSearchBookmarks } from "@/features/bookmarks/hooks/useSearchBookmarks";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
@@ -16,7 +17,6 @@ import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { SearchField } from "@/shared/ui/SearchField";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
-import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/search/SearchScreen.styles";
 import { spacing, useTheme } from "@/theme";
 
@@ -34,9 +34,12 @@ export function SearchScreen() {
   const trimmedQuery = query.trim();
   const libraryIsEmpty = countsStatus === "ready" && allCount === 0;
 
-  const openBookmark = useCallback((bookmark: Bookmark) => {
-    void openExternalUrl(bookmark.originalUrl);
-  }, []);
+  const openBookmark = useCallback(
+    (bookmark: Bookmark) => {
+      openBookmarkDestination(bookmark, router);
+    },
+    [router]
+  );
 
   return (
     <Screen>

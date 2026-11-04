@@ -1,34 +1,65 @@
 import type { TextStyle } from "react-native";
 
 /**
- * Mobile-tuned Material 3 type roles. Android renders these with the system
- * Roboto family; sizes are intentionally compact for phone reading and still
- * scale with the system font-size setting.
+ * Material 3 Expressive-inspired type roles for mobile: large, confident
+ * display/headline weights with tight tracking, compact body copy, and small
+ * uppercase labels. Android renders these with the system Roboto family and
+ * still scales with the system font-size setting.
  */
 export const typography = {
-  displayLarge: { fontSize: 48, lineHeight: 56, fontWeight: "400" },
-  displayMedium: { fontSize: 40, lineHeight: 48, fontWeight: "400" },
-  displaySmall: { fontSize: 32, lineHeight: 40, fontWeight: "400" },
-  headlineLarge: { fontSize: 28, lineHeight: 36, fontWeight: "400" },
-  headlineMedium: { fontSize: 24, lineHeight: 32, fontWeight: "400" },
-  headlineSmall: { fontSize: 22, lineHeight: 28, fontWeight: "500" },
-  titleLarge: { fontSize: 20, lineHeight: 26, fontWeight: "500" },
-  titleMedium: { fontSize: 15, lineHeight: 22, fontWeight: "500" },
-  titleSmall: { fontSize: 13, lineHeight: 18, fontWeight: "500" },
-  bodyLarge: { fontSize: 15, lineHeight: 22, fontWeight: "400" },
-  bodyMedium: { fontSize: 13, lineHeight: 18, fontWeight: "400" },
-  bodySmall: { fontSize: 12, lineHeight: 16, fontWeight: "400" },
-  labelLarge: { fontSize: 13, lineHeight: 18, fontWeight: "500" },
-  labelMedium: { fontSize: 11, lineHeight: 16, fontWeight: "500" },
-  labelSmall: { fontSize: 10, lineHeight: 14, fontWeight: "500" },
+  displayLarge: {
+    fontSize: 52,
+    lineHeight: 60,
+    fontWeight: "700",
+    letterSpacing: -1,
+  },
+  displayMedium: {
+    fontSize: 44,
+    lineHeight: 52,
+    fontWeight: "700",
+    letterSpacing: -0.8,
+  },
+  displaySmall: {
+    fontSize: 36,
+    lineHeight: 44,
+    fontWeight: "700",
+    letterSpacing: -0.6,
+  },
+  headlineLarge: {
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+  },
+  headlineMedium: {
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: "700",
+    letterSpacing: -0.4,
+  },
+  headlineSmall: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+  },
+  titleLarge: { fontSize: 20, lineHeight: 26, fontWeight: "600" },
+  titleMedium: { fontSize: 16, lineHeight: 22, fontWeight: "600" },
+  titleSmall: { fontSize: 14, lineHeight: 20, fontWeight: "500" },
+  bodyLarge: { fontSize: 15, lineHeight: 23, fontWeight: "400" },
+  bodyMedium: { fontSize: 13, lineHeight: 19, fontWeight: "400" },
+  bodySmall: { fontSize: 12, lineHeight: 17, fontWeight: "400" },
+  labelLarge: { fontSize: 13, lineHeight: 18, fontWeight: "600" },
+  labelMedium: { fontSize: 11, lineHeight: 16, fontWeight: "600" },
+  labelSmall: { fontSize: 10, lineHeight: 14, fontWeight: "600" },
   /** Small caption/body alias used for compact metadata. */
-  textSmall: { fontSize: 12, lineHeight: 16, fontWeight: "400" },
-  /** Uppercase micro-label used above section headings, per the design. */
+  textSmall: { fontSize: 12, lineHeight: 17, fontWeight: "400" },
+  /** Uppercase micro-label used above section headings. */
   eyebrow: {
     fontSize: 10,
     lineHeight: 14,
-    fontWeight: "600",
-    letterSpacing: 1.1,
+    fontWeight: "700",
+    letterSpacing: 1.5,
     textTransform: "uppercase",
   },
 } satisfies Record<string, TextStyle>;

@@ -11,6 +11,7 @@ type IconButtonProps = {
   size?: number;
   disabled?: boolean;
   withBackground?: boolean;
+  inkColor?: string;
 };
 
 export function IconButton({
@@ -21,6 +22,7 @@ export function IconButton({
   size = 24,
   disabled = false,
   withBackground = false,
+  inkColor,
 }: IconButtonProps) {
   const { theme } = useTheme();
 
@@ -33,6 +35,7 @@ export function IconButton({
       onPress={onPress}
       hitSlop={8}
       scaleTo={0.94}
+      inkColor={inkColor}
       style={[
         styles.container,
         withBackground ? { backgroundColor: theme.colors.surfaceContainerLow } : null,

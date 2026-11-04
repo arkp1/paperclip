@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { FlatList, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -7,9 +7,11 @@ import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkA
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
 import { BookmarkSortDialog } from "@/features/bookmarks/components/BookmarkSortDialog";
 import { BookmarkViewSelector } from "@/features/bookmarks/components/BookmarkViewSelector";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { useBookmarkSortMode } from "@/features/bookmarks/hooks/useBookmarkSortMode";
 import { useBookmarkViewMode } from "@/features/bookmarks/hooks/useBookmarkViewMode";
 import { useCollectionBookmarks } from "@/features/bookmarks/hooks/useCollectionBookmarks";
+import { refreshMissingPreviews } from "@/features/bookmarks/services/previewService";
 import type {
   Bookmark,
   BookmarkCollection,
@@ -47,6 +49,17 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
   const [sortVisible, setSortVisible] = useState(false);
   const { viewMode, setViewMode } = useBookmarkViewMode();
   const [viewDirection, setViewDirection] = useState<1 | -1>(1);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await reload();
+      await refreshMissingPreviews();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reload]);
 
   const handleViewModeChange = useCallback(
     (nextMode: BookmarkViewMode) => {
@@ -58,9 +71,12 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
     [setViewMode, viewMode]
   );
 
-  const openBookmark = useCallback((bookmark: Bookmark) => {
-    void openExternalUrl(bookmark.originalUrl);
-  }, []);
+  const openBookmark = useCallback(
+    (bookmark: Bookmark) => {
+      openBookmarkDestination(bookmark, router);
+    },
+    [router]
+  );
 
   const collectionIcon =
     collection === "all"
@@ -115,6 +131,14 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
         windowSize={7}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+          />
+        }
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: insets.bottom + spacing[6] },

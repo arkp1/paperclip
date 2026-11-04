@@ -65,7 +65,7 @@ export function TextField({
         maxLength={maxLength}
         isError={hasError}
         shape={Shape.RoundedCorner({
-          cornerRadii: { topStart: 16, topEnd: 16, bottomStart: 16, bottomEnd: 16 },
+          cornerRadii: { topStart: 12, topEnd: 12, bottomStart: 12, bottomEnd: 12 },
         })}
         keyboardOptions={{
           imeAction: onSubmitEditing ? "done" : "default",

@@ -65,7 +65,7 @@ function ThemedNavigator() {
           screenOptions={{
             headerShown: false,
             animation: reduceMotion ? "none" : "slide_from_right",
-            animationDuration: 140,
+            animationDuration: 120,
             contentStyle: { backgroundColor: theme.colors.background },
           }}
         />

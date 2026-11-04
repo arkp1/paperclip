@@ -251,9 +251,11 @@ export async function applyBackup(
           );
           directory.create({ intermediates: true, idempotent: true });
           const file = new File(directory, `${id}.${image.extension}`);
-          await LegacyFileSystem.writeAsStringAsync(file.uri, image.base64, {
-            encoding: LegacyFileSystem.EncodingType.Base64,
-          });
+          if (file.exists) {
+            file.delete();
+          }
+          file.create({ intermediates: true });
+          await file.write(decodeBase64(image.base64));
           if (!file.exists || file.size === 0) {
             throw new Error("Preview image was not written.");
           }
@@ -389,3 +391,37 @@ function extensionFromPath(path: string): string | null {
   const extension = path.split(".").pop()?.toLowerCase();
   return extension && IMAGE_EXTENSIONS.has(extension) ? extension : null;
 }
+
+const BASE64_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function decodeBase64(input: string): Uint8Array {
+  const payload = input.includes(",") ? input.slice(input.indexOf(",") + 1) : input;
+  const clean = payload.replace(/[^A-Za-z0-9+/=]/g, "");
+  const padding = clean.endsWith("==") ? 2 : clean.endsWith("=") ? 1 : 0;
+  const output = new Uint8Array(Math.max(0, (clean.length * 3) / 4 - padding));
+  let buffer = 0;
+  let bits = 0;
+  let index = 0;
+
+  for (let i = 0; i < clean.length; i += 1) {
+    const char = clean[i];
+    if (!char || char === "=") {
+      break;
+    }
+    const value = BASE64_ALPHABET.indexOf(char);
+    if (value < 0) {
+      continue;
+    }
+    buffer = (buffer << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output[index] = (buffer >> bits) & 0xff;
+      index += 1;
+    }
+  }
+
+  return output.slice(0, index);
+}
+

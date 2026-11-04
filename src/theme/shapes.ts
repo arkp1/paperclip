@@ -4,8 +4,8 @@ export const shapes = {
   small: 8,
   medium: 12,
   large: 16,
-  extraLarge: 24,
-  dialog: 28,
+  extraLarge: 20,
+  dialog: 24,
   full: 999,
 } as const;
 

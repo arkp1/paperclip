@@ -17,7 +17,7 @@ export const styles = StyleSheet.create({
   },
   group: {
     backgroundColor: "transparent",
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
