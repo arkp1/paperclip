@@ -10,17 +10,24 @@ import {
 import { useColorScheme } from "react-native";
 
 import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
-import { darkTheme, lightTheme, type Theme, type ThemeScheme } from "./themes";
+import { isAccentKey, type AccentKey } from "./accents";
+import { createTheme, type Theme, type ThemeScheme } from "./themes";
 
 export type ThemeMode = "system" | "light" | "dark";
 
 const THEME_MODE_SETTING_KEY = "theme_mode";
+const AMOLED_SETTING_KEY = "theme_amoled";
+const ACCENT_SETTING_KEY = "accent_color";
 
 type ThemeContextValue = {
   theme: Theme;
   isDark: boolean;
   mode: ThemeMode;
+  accent: AccentKey;
+  amoled: boolean;
   setMode: (mode: ThemeMode) => void;
+  setAccent: (accent: AccentKey) => void;
+  setAmoled: (enabled: boolean) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -39,14 +46,29 @@ function resolveScheme(mode: ThemeMode, systemScheme: ThemeScheme | null): Theme
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>("system");
+  const [accent, setAccentState] = useState<AccentKey>("violet");
+  const [amoled, setAmoledState] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    void getSetting(THEME_MODE_SETTING_KEY)
-      .then((storedMode) => {
-        if (!cancelled && isThemeMode(storedMode)) {
+    void Promise.all([
+      getSetting(THEME_MODE_SETTING_KEY),
+      getSetting(AMOLED_SETTING_KEY),
+      getSetting(ACCENT_SETTING_KEY),
+    ])
+      .then(([storedMode, storedAmoled, storedAccent]) => {
+        if (cancelled) {
+          return;
+        }
+        if (isThemeMode(storedMode)) {
           setModeState(storedMode);
+        }
+        if (storedAmoled === "true") {
+          setAmoledState(true);
+        }
+        if (isAccentKey(storedAccent)) {
+          setAccentState(storedAccent);
         }
       })
       .catch(() => {
@@ -62,16 +84,40 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback((nextMode: ThemeMode) => {
     setModeState(nextMode);
     void setSetting(THEME_MODE_SETTING_KEY, nextMode).catch(() => {
-      // The choice applies for this session even if persisting it fails.
       console.warn("Could not persist the appearance preference.");
     });
   }, []);
 
+  const setAccent = useCallback((nextAccent: AccentKey) => {
+    setAccentState(nextAccent);
+    void setSetting(ACCENT_SETTING_KEY, nextAccent).catch(() => {
+      console.warn("Could not persist the accent preference.");
+    });
+  }, []);
+
+  const setAmoled = useCallback((enabled: boolean) => {
+    setAmoledState(enabled);
+    void setSetting(AMOLED_SETTING_KEY, enabled ? "true" : "false").catch(() => {
+      console.warn("Could not persist the AMOLED preference.");
+    });
+  }, []);
+
   const value = useMemo<ThemeContextValue>(() => {
-    const scheme = resolveScheme(mode, systemScheme === "dark" ? "dark" : systemScheme === "light" ? "light" : null);
-    const theme = scheme === "dark" ? darkTheme : lightTheme;
-    return { theme, isDark: scheme === "dark", mode, setMode };
-  }, [mode, setMode, systemScheme]);
+    const scheme = resolveScheme(
+      mode,
+      systemScheme === "dark" ? "dark" : systemScheme === "light" ? "light" : null
+    );
+    return {
+      theme: createTheme(scheme, accent, amoled),
+      isDark: scheme === "dark",
+      mode,
+      accent,
+      amoled,
+      setMode,
+      setAccent,
+      setAmoled,
+    };
+  }, [accent, amoled, mode, setAccent, setAmoled, setMode, systemScheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

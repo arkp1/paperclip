@@ -1,14 +1,16 @@
 import { SegmentedControl } from "@expo/ui/community/segmented-control";
 import Constants from "expo-constants";
-import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
+import { ScrollView, Switch, View } from "react-native";
 
 import { AppText } from "@/shared/ui/AppText";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
+import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { styles } from "@/styles/features/settings/SettingsScreen.styles";
-import { useTheme } from "@/theme";
+import { accentOptions, accentSwatch, useTheme } from "@/theme";
 import type { ThemeMode } from "@/theme/ThemeProvider";
 
 const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
@@ -18,7 +20,8 @@ const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
 ];
 
 export function SettingsScreen() {
-  const { theme, mode, setMode } = useTheme();
+  const { theme, mode, setMode, accent, setAccent, amoled, setAmoled } = useTheme();
+  const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
   const version = Constants.expoConfig?.version ?? "1.0.0";
   const selectedIndex = Math.max(
@@ -65,6 +68,74 @@ export function SettingsScreen() {
               style={styles.segmented}
             />
           </View>
+
+          <View
+            style={[styles.group, styles.themeGroup, { borderColor: theme.colors.outlineVariant }]}
+          >
+            <View style={styles.themeCopy}>
+              <AppText variant="bodyLarge">Accent</AppText>
+              <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+                Choose the accent used across Paperclip.
+              </AppText>
+            </View>
+
+            <View style={styles.accentRow}>
+              {accentOptions.map((option) => {
+                const selected = accent === option.key;
+                return (
+                  <ScalePressable
+                    key={option.key}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${option.label} accent`}
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => setAccent(option.key)}
+                    scaleTo={0.92}
+                    style={[
+                      styles.swatch,
+                      {
+                        backgroundColor: accentSwatch(option.key),
+                        borderColor: selected
+                          ? theme.colors.onSurface
+                          : "transparent",
+                      },
+                    ]}
+                  >
+                    {selected ? (
+                      <View
+                        style={[
+                          styles.swatchCheck,
+                          { backgroundColor: theme.colors.surface },
+                        ]}
+                      />
+                    ) : null}
+                  </ScalePressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View
+            style={[styles.group, { borderColor: theme.colors.outlineVariant }]}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowCopy}>
+                <AppText variant="bodyLarge">AMOLED black</AppText>
+                <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+                  Use a pure black background whenever the dark theme is active.
+                </AppText>
+              </View>
+              <Switch
+                value={amoled}
+                onValueChange={setAmoled}
+                trackColor={{
+                  false: theme.colors.surfaceContainerHigh,
+                  true: theme.colors.primary,
+                }}
+                thumbColor={theme.colors.onPrimary}
+                accessibilityLabel="AMOLED black background"
+              />
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -75,13 +146,13 @@ export function SettingsScreen() {
           <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
             <InfoRow
               icon="shield-lock-outline"
-              title="Private folders"
-              description="Encrypted private folders and biometric unlock are not enabled in this build yet."
+              title="Locked folders"
+              description="Lock folders from their menu. Unlocking uses biometrics or your device PIN; database encryption is not enabled in this build."
             />
             <InfoRow
               icon="lock-outline"
-              title="Auto-lock"
-              description="Becomes available once private folders ship."
+              title="Session lock"
+              description="Unlocked folders lock again when Paperclip leaves the foreground."
             />
           </View>
         </View>
@@ -92,11 +163,16 @@ export function SettingsScreen() {
           </AppText>
 
           <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
-            <InfoRow
-              icon="database-outline"
-              title="Import &amp; export"
-              description="Versioned backups arrive with the backup milestone."
-            />
+            <ScalePressable
+              onPress={() => router.push("/backup")}
+              scaleTo={0.99}
+            >
+              <InfoRow
+                icon="database-outline"
+                title="Import &amp; export"
+                description="Export a public backup or merge one into this library."
+              />
+            </ScalePressable>
             <InfoRow
               icon="information-outline"
               title="Local-first storage"

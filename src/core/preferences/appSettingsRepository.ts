@@ -1,6 +1,11 @@
 import { getDatabase } from "@/core/database/database";
 
-export type AppSettingKey = "theme_mode" | "bookmark_view" | "bookmark_sort";
+export type AppSettingKey =
+  | "theme_mode"
+  | "theme_amoled"
+  | "accent_color"
+  | "bookmark_view"
+  | "bookmark_sort";
 
 export async function getSetting(key: AppSettingKey): Promise<string | null> {
   const database = await getDatabase();

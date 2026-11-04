@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { FlatList, RefreshControl, View } from "react-native";
+import { Alert, FlatList, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
@@ -9,8 +9,10 @@ import { FolderActionsDialog } from "@/features/folders/components/FolderActions
 import { FolderCard } from "@/features/folders/components/FolderCard";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import { SmartCollectionCard } from "@/features/folders/components/SmartCollectionCard";
+import { setFolderPrivate } from "@/features/folders/data/folderRepository";
 import { useFolders } from "@/features/folders/hooks/useFolders";
 import type { Folder, FolderDeleteStrategy } from "@/features/folders/types";
+import type { FolderColorKey } from "@/theme";
 import { AppText } from "@/shared/ui/AppText";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -41,29 +43,41 @@ export function FoldersScreen() {
     rename,
     remove,
   } = useFolders();
-  const { allCount, uncategorizedCount, favoriteCount } = useCollectionCounts();
+  const {
+    allCount,
+    uncategorizedCount,
+    favoriteCount,
+    privateFolderCount,
+    reload: reloadCounts,
+  } = useCollectionCounts();
 
   const [createVisible, setCreateVisible] = useState(false);
   const [actionsFolder, setActionsFolder] = useState<Folder | null>(null);
   const [renameFolder, setRenameFolder] = useState<Folder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
 
-  const handleCreate = async (name: string): Promise<string | null> => {
+  const handleCreate = async (
+    name: string,
+    colorKey: FolderColorKey
+  ): Promise<string | null> => {
     try {
-      await create(name);
+      await create(name, colorKey);
       return null;
     } catch (error) {
       return describeFolderError(error);
     }
   };
 
-  const handleRename = async (name: string): Promise<string | null> => {
+  const handleRename = async (
+    name: string,
+    colorKey: FolderColorKey
+  ): Promise<string | null> => {
     if (!renameFolder) {
       return null;
     }
 
     try {
-      await rename(renameFolder.id, name);
+      await rename(renameFolder.id, name, colorKey);
       return null;
     } catch (error) {
       return describeFolderError(error);
@@ -75,6 +89,18 @@ export function FoldersScreen() {
       return;
     }
     await remove(deleteTarget.id, strategy);
+  };
+
+  const handleMakePrivate = async (folder: Folder) => {
+    setActionsFolder(null);
+
+    try {
+      await setFolderPrivate(folder.id, true);
+      await reload();
+      await reloadCounts();
+    } catch {
+      Alert.alert("Private folders", "Could not move this folder to Private.");
+    }
   };
 
   const openFolder = useCallback(
@@ -135,25 +161,41 @@ export function FoldersScreen() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.smartCollections}>
-              <SmartCollectionCard
-                icon="bookmark-multiple-outline"
-                title="All bookmarks"
-                subtitle={`${allCount} saved`}
-                onPress={() => router.push("/bookmarks/all")}
-              />
-              <SmartCollectionCard
-                icon="heart-outline"
-                title="Favourites"
-                subtitle={`${favoriteCount} saved`}
-                onPress={() => router.push("/bookmarks/favourites")}
-              />
-              <SmartCollectionCard
-                icon="inbox-outline"
-                title="Uncategorized"
-                subtitle={`${uncategorizedCount} saved`}
-                onPress={() => router.push("/bookmarks/uncategorized")}
-              />
+            <View style={styles.smartGrid}>
+              <View style={styles.smartGridItem}>
+                <SmartCollectionCard
+                  icon="bookmark-multiple-outline"
+                  title="All bookmarks"
+                  subtitle={`${allCount} saved`}
+                  onPress={() => router.push("/bookmarks/all")}
+                />
+              </View>
+              <View style={styles.smartGridItem}>
+                <SmartCollectionCard
+                  icon="heart-outline"
+                  title="Favourites"
+                  subtitle={`${favoriteCount} saved`}
+                  onPress={() => router.push("/bookmarks/favourites")}
+                />
+              </View>
+              <View style={styles.smartGridItem}>
+                <SmartCollectionCard
+                  icon="inbox-outline"
+                  title="Uncategorized"
+                  subtitle={`${uncategorizedCount} saved`}
+                  onPress={() => router.push("/bookmarks/uncategorized")}
+                />
+              </View>
+              <View style={styles.smartGridItem}>
+                <SmartCollectionCard
+                  icon="lock-outline"
+                  title="Private"
+                  subtitle={`${privateFolderCount} ${
+                    privateFolderCount === 1 ? "folder" : "folders"
+                  }`}
+                  onPress={() => router.push("/folders/private")}
+                />
+              </View>
             </View>
 
             <View style={styles.sectionHeader}>
@@ -212,6 +254,7 @@ export function FoldersScreen() {
         title="Rename folder"
         description="Choose a new name for this folder."
         initialValue={renameFolder?.name ?? ""}
+        initialColorKey={renameFolder?.colorKey}
         confirmLabel="Save"
         onClose={() => setRenameFolder(null)}
         onSubmit={handleRename}
@@ -228,6 +271,11 @@ export function FoldersScreen() {
         onDelete={() => {
           setDeleteTarget(actionsFolder);
           setActionsFolder(null);
+        }}
+        onTogglePrivacy={() => {
+          if (actionsFolder) {
+            void handleMakePrivate(actionsFolder);
+          }
         }}
       />
 

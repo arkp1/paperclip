@@ -1,4 +1,5 @@
 import { getDatabase } from "@/core/database/database";
+import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
 import {
   FolderNotFoundError,
@@ -64,7 +65,8 @@ SELECT
   b.preview_status AS previewStatus,
   b.is_favorite AS isFavorite,
   b.created_at AS createdAt,
-  b.updated_at AS updatedAt
+  b.updated_at AS updatedAt,
+  f.name AS folderName
 FROM bookmarks b
 LEFT JOIN folders f ON f.id = b.folder_id
 `;
@@ -151,6 +153,21 @@ export async function listPublicBookmarks(
   return rows.map((row) => ({ ...mapBookmarkRow(row), folderName: row.folderName }));
 }
 
+export async function getPublicBookmarkById(
+  id: string
+): Promise<BookmarkView | null> {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync<BookmarkListRow>(
+    `${BOOKMARK_SELECT}
+     WHERE b.id = ? AND ${PUBLIC_BOOKMARKS_FILTER}`,
+    id
+  );
+
+  return row
+    ? { ...mapBookmarkRow(row), folderName: row.folderName ?? null }
+    : null;
+}
+
 export async function listBookmarksInFolder(
   folderId: string,
   sort: BookmarkSortMode = "recent"
@@ -164,7 +181,7 @@ export async function listBookmarksInFolder(
   if (!folder) {
     throw new FolderNotFoundError();
   }
-  if (folder.isPrivate === 1) {
+  if (folder.isPrivate === 1 && !isPrivateSpaceUnlocked()) {
     throw new PrivateFolderLockedError();
   }
 

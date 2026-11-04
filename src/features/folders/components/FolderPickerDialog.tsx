@@ -28,13 +28,6 @@ export function FolderPickerDialog({
   onSelect,
   onClose,
 }: FolderPickerDialogProps) {
-  const { theme } = useTheme();
-
-  const choose = (folderId: string | null) => {
-    onSelect(folderId);
-    onClose();
-  };
-
   return (
     <AppDialog
       visible={visible}
@@ -43,41 +36,64 @@ export function FolderPickerDialog({
       description="Choose where this link should live. Uncategorized is the default."
       actions={<Button label="Done" variant="tonal" onPress={onClose} />}
     >
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <FolderRow
-          title="Uncategorized"
-          subtitle="No folder"
-          tint={folderColors.butter}
-          selected={selectedFolderId === null}
-          onPress={() => choose(null)}
-        />
-
-        {folders.map((folder) => {
-          const tint = folderColors[folder.colorKey ?? pickFolderColorKey(folder.id)];
-          const isLocked = folder.isPrivate;
-
-          return (
-            <FolderRow
-              key={folder.id}
-              title={folder.name}
-              subtitle={
-                isLocked
-                  ? "Locked private folder"
-                  : `${folder.bookmarkCount ?? 0} saved`
-              }
-              tint={tint}
-              selected={selectedFolderId === folder.id}
-              disabled={isLocked}
-              onPress={() => {
-                if (!isLocked) {
-                  choose(folder.id);
-                }
-              }}
-            />
-          );
-        })}
-      </ScrollView>
+      <FolderPickerContent
+        folders={folders}
+        selectedFolderId={selectedFolderId}
+        onSelect={(folderId) => {
+          onSelect(folderId);
+          onClose();
+        }}
+      />
     </AppDialog>
+  );
+}
+
+type FolderPickerContentProps = {
+  folders: Folder[];
+  selectedFolderId: string | null;
+  onSelect: (folderId: string | null) => void;
+};
+
+export function FolderPickerContent({
+  folders,
+  selectedFolderId,
+  onSelect,
+}: FolderPickerContentProps) {
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      <FolderRow
+        title="Uncategorized"
+        subtitle="No folder"
+        tint={folderColors.butter}
+        selected={selectedFolderId === null}
+        onPress={() => onSelect(null)}
+      />
+
+      {folders.map((folder) => {
+        const tint = folderColors[folder.colorKey ?? pickFolderColorKey(folder.id)];
+        const isLocked = folder.isPrivate;
+
+        return (
+          <FolderRow
+            key={folder.id}
+            title={folder.name}
+            subtitle={
+              isLocked
+                ? "Locked private folder"
+                : `${folder.bookmarkCount ?? 0} saved`
+            }
+            tint={tint}
+            selected={selectedFolderId === folder.id}
+            disabled={isLocked}
+            onPress={() => {
+              if (!isLocked) {
+                onSelect(folder.id);
+              }
+            }}
+          />
+        );
+      })}
+    </ScrollView>
   );
 }
 

@@ -18,9 +18,7 @@ type FolderCardProps = {
 function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
   const { theme } = useTheme();
   const tint = folderColors[folder.colorKey ?? pickFolderColorKey(folder.id)];
-  const countLabel = folder.isPrivate
-    ? "Private"
-    : `${folder.bookmarkCount ?? 0} saved`;
+  const countLabel = `${folder.bookmarkCount ?? 0} saved`;
 
   return (
     <ScalePressable
@@ -39,7 +37,7 @@ function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
     >
       <View style={[styles.iconTile, { backgroundColor: tint.background }]}>
         <MaterialCommunityIcons
-          name={folder.isPrivate ? "folder-lock" : "folder"}
+          name="folder"
           size={22}
           color={tint.foreground}
         />
@@ -50,13 +48,6 @@ function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
           {folder.name}
         </AppText>
         <View style={styles.metaRow}>
-          {folder.isPrivate ? (
-            <MaterialCommunityIcons
-              name="lock-outline"
-              size={12}
-              color={theme.colors.onSurfaceVariant}
-            />
-          ) : null}
           <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
             {countLabel}
           </AppText>

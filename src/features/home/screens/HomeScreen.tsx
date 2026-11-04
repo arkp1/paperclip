@@ -97,13 +97,33 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <MaterialCommunityIcons
-            name="folder-outline"
-            size={20}
-            color={theme.colors.onSurfaceVariant}
-          />
-          <AppText variant="titleLarge">Recent folders</AppText>
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionTitleRow}>
+            <MaterialCommunityIcons
+              name="folder-outline"
+              size={20}
+              color={theme.colors.onSurfaceVariant}
+            />
+            <AppText variant="titleLarge">Recent folders</AppText>
+          </View>
+          {folders.length > 0 ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="View all folders"
+              onPress={() => router.navigate("/folders")}
+              scaleTo={0.95}
+              style={styles.viewAll}
+            >
+              <AppText variant="labelLarge" color={theme.colors.primary}>
+                View all
+              </AppText>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={16}
+                color={theme.colors.primary}
+              />
+            </ScalePressable>
+          ) : null}
         </View>
 
         {foldersStatus === "loading" ? (
@@ -127,13 +147,17 @@ export function HomeScreen() {
             }}
           />
         ) : (
-          <View style={styles.grid}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalContent}
+          >
             {folders.map((folder) => (
-              <View key={folder.id} style={styles.gridItem}>
+              <View key={folder.id} style={styles.folderSlide}>
                 <FolderCard folder={folder} onPress={openFolder} />
               </View>
             ))}
-          </View>
+          </ScrollView>
         )}
 
         <View style={styles.sectionHeaderRow}>
@@ -145,22 +169,23 @@ export function HomeScreen() {
             />
             <AppText variant="titleLarge">Recently saved</AppText>
           </View>
-          <ScalePressable
-            accessibilityRole="button"
-            accessibilityLabel="View all saved links"
-            onPress={() => router.push("/bookmarks/all")}
-            scaleTo={0.95}
-            style={styles.viewAll}
-          >
-            <AppText variant="labelLarge" color={theme.colors.primary}>
-              View all
-            </AppText>
-            <MaterialCommunityIcons
-              name="chevron-right"
-              size={16}
-              color={theme.colors.primary}
-            />
-          </ScalePressable>
+          {bookmarks.length > 0 ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="View all saved links"
+              onPress={() => router.push("/bookmarks/all")}
+              scaleTo={0.95}
+              style={styles.viewAll}
+            >              <AppText variant="labelLarge" color={theme.colors.primary}>
+                View all
+              </AppText>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={16}
+                color={theme.colors.primary}
+              />
+            </ScalePressable>
+          ) : null}
         </View>
 
         {bookmarksStatus === "loading" ? (

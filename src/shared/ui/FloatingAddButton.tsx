@@ -54,7 +54,7 @@ export function FloatingAddButton({
       accessibilityRole="button"
       accessibilityLabel="Save a link"
       onPress={onPress}
-      scaleTo={0.95}
+      scaleTo={0.94}
       style={[
         styles.fab,
         {

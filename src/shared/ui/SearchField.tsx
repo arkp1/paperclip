@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { View } from "react-native";
 import type { TextFieldRef } from "@expo/ui/jetpack-compose";
 
-import { IconButton } from "@/shared/ui/IconButton";
 import { TextField } from "@/shared/ui/TextField";
 import { styles } from "@/styles/shared/ui/SearchField.styles";
 
@@ -23,7 +22,6 @@ export function SearchField({
   placeholder = "Search your library",
   autoFocus = false,
 }: SearchFieldProps) {
-  const [resetKey, setResetKey] = useState(0);
   const fieldRef = useRef<TextFieldRef>(null);
 
   useEffect(() => {
@@ -38,13 +36,12 @@ export function SearchField({
     return () => {
       clearTimeout(timer);
     };
-  }, [autoFocus, resetKey]);
+  }, [autoFocus]);
 
   return (
     <View style={styles.container}>
       <View style={styles.field}>
         <TextField
-          key={`search-${resetKey}`}
           inputRef={fieldRef}
           label="Search"
           value={value}
@@ -52,17 +49,6 @@ export function SearchField({
           placeholder={placeholder}
         />
       </View>
-
-      {value.length > 0 ? (
-        <IconButton
-          icon="close"
-          label="Clear search"
-          onPress={() => {
-            onChangeText("");
-            setResetKey((current) => current + 1);
-          }}
-        />
-      ) : null}
     </View>
   );
 }

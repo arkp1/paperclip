@@ -6,7 +6,7 @@ import {
   ScrollView,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -46,6 +46,10 @@ export function SaveLinkScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { folders } = useFolders();
+  const params = useLocalSearchParams<{ sharedUrl?: string | string[] }>();
+  const sharedUrlParam =
+    typeof params.sharedUrl === "string" ? params.sharedUrl : null;
+  const handledSharedUrl = useRef<string | null>(null);
 
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -62,6 +66,21 @@ export function SaveLinkScreen() {
   >("idle");
   const [titleVersion, setTitleVersion] = useState(0);
   const titleEditedRef = useRef(false);
+
+  useEffect(() => {
+    if (!sharedUrlParam || handledSharedUrl.current === sharedUrlParam) {
+      return;
+    }
+
+    const validation = validateHttpUrl(sharedUrlParam);
+    if (!validation.valid) {
+      return;
+    }
+
+    handledSharedUrl.current = sharedUrlParam;
+    setUrl(validation.url);
+    setUrlError(null);
+  }, [sharedUrlParam]);
 
   useEffect(() => {
     const validation = validateHttpUrl(url);

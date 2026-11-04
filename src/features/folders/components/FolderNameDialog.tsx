@@ -3,40 +3,58 @@ import { View } from "react-native";
 
 import { validateFolderName } from "@/features/folders/validation";
 import { AppDialog } from "@/shared/ui/AppDialog";
+import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
+import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { TextField } from "@/shared/ui/TextField";
+import { styles } from "@/styles/features/folders/FolderNameDialog.styles";
+import {
+  defaultFolderColorKey,
+  folderColors,
+  type FolderColorKey,
+  useTheme,
+} from "@/theme";
 
 type FolderNameDialogProps = {
   visible: boolean;
   title: string;
   description?: string;
   initialValue?: string;
+  initialColorKey?: FolderColorKey | null;
   confirmLabel: string;
   onClose: () => void;
   /** Resolves to an error message, or null when the folder was saved. */
-  onSubmit: (name: string) => Promise<string | null>;
+  onSubmit: (name: string, colorKey: FolderColorKey) => Promise<string | null>;
 };
+
+const COLOR_KEYS = Object.keys(folderColors) as FolderColorKey[];
 
 export function FolderNameDialog({
   visible,
   title,
   description,
   initialValue = "",
+  initialColorKey,
   confirmLabel,
   onClose,
   onSubmit,
 }: FolderNameDialogProps) {
+  const { theme } = useTheme();
   const [name, setName] = useState(initialValue);
+  const [colorKey, setColorKey] = useState<FolderColorKey>(
+    initialColorKey ?? defaultFolderColorKey
+  );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setName(initialValue);
+      setColorKey(initialColorKey ?? defaultFolderColorKey);
       setError(null);
       setSubmitting(false);
     }
-  }, [initialValue, visible]);
+  }, [initialColorKey, initialValue, visible]);
 
   const handleConfirm = async () => {
     if (submitting) {
@@ -53,7 +71,7 @@ export function FolderNameDialog({
     setSubmitting(true);
 
     try {
-      const message = await onSubmit(validation.name);
+      const message = await onSubmit(validation.name, colorKey);
       if (message) {
         setError(message);
       } else {
@@ -110,6 +128,43 @@ export function FolderNameDialog({
             void handleConfirm();
           }}
         />
+
+        <View style={styles.colorSection}>
+          <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+            Folder color
+          </AppText>
+          <View style={styles.colorRow}>
+            {COLOR_KEYS.map((key) => {
+              const selected = colorKey === key;
+              return (
+                <ScalePressable
+                  key={key}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${key} folder color`}
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => setColorKey(key)}
+                  scaleTo={0.9}
+                  style={[
+                    styles.swatch,
+                    {
+                      backgroundColor: folderColors[key].background,
+                      borderColor: selected ? theme.colors.onSurface : "transparent",
+                    },
+                  ]}
+                >
+                  {selected ? (
+                    <View
+                      style={[
+                        styles.check,
+                        { backgroundColor: folderColors[key].foreground },
+                      ]}
+                    />
+                  ) : null}
+                </ScalePressable>
+              );
+            })}
+          </View>
+        </View>
       </View>
     </AppDialog>
   );

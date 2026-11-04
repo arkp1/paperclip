@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { FlatList, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
@@ -11,36 +11,39 @@ import { BOOKMARK_VIEW_MODES } from "@/features/bookmarks/types";
 import { useBookmarkSortMode } from "@/features/bookmarks/hooks/useBookmarkSortMode";
 import { useBookmarkViewMode } from "@/features/bookmarks/hooks/useBookmarkViewMode";
 import { useFolderBookmarks } from "@/features/bookmarks/hooks/useFolderBookmarks";
+import {
+  unlockPrivateSpace,
+  usePrivateSpaceSession,
+} from "@/core/security/privateSpaceSession";
 import { DeleteFolderDialog } from "@/features/folders/components/DeleteFolderDialog";
 import { FolderActionsDialog } from "@/features/folders/components/FolderActionsDialog";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import {
   deleteFolder,
   renameFolder,
+  setFolderColor,
+  setFolderPrivate,
 } from "@/features/folders/data/folderRepository";
+import type { FolderColorKey } from "@/theme";
 import { describeFolderError } from "@/features/folders/errors";
 import { useFolderDetails } from "@/features/folders/hooks/useFolderDetails";
 import type { FolderDeleteStrategy } from "@/features/folders/types";
-import { AppText } from "@/shared/ui/AppText";
 import { AnimatedLayoutChange } from "@/shared/ui/AnimatedLayoutChange";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
 import { IconButton } from "@/shared/ui/IconButton";
-import { MaterialCommunityIcons } from "@/shared/ui/icons";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/folders/FolderDetailsScreen.styles";
-import { folderColors, pickFolderColorKey, useTheme } from "@/theme";
 
 type FolderDetailsScreenProps = {
   folderId: string;
 };
 
 export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
-  const { theme } = useTheme();
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
 
@@ -60,6 +63,46 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
   const { viewMode, setViewMode } = useBookmarkViewMode();
   const [viewDirection, setViewDirection] = useState<1 | -1>(1);
+  const { isUnlocked } = usePrivateSpaceSession();
+
+  useEffect(() => {
+    if (folder?.isPrivate) {
+      void reloadBookmarks();
+    }
+  }, [folder?.isPrivate, isUnlocked, reloadBookmarks]);
+
+  useEffect(() => {
+    if (folder?.isPrivate && !isUnlocked) {
+      setSelectedBookmark(null);
+      setActionsVisible(false);
+    }
+  }, [folder?.isPrivate, isUnlocked]);
+
+  const unlockCurrentFolder = async () => {
+    const result = await unlockPrivateSpace();
+    if (!result.success) {
+      Alert.alert("Private folders", result.message);
+    }
+  };
+
+  const handleTogglePrivacy = async () => {
+    setActionsVisible(false);
+    if (!folder) {
+      return;
+    }
+
+    try {
+      if (folder.isPrivate) {
+        await setFolderPrivate(folder.id, false);
+        await reload();
+      } else {
+        await setFolderPrivate(folder.id, true);
+        router.back();
+      }
+    } catch {
+      Alert.alert("Private folders", "Could not update this folder.");
+    }
+  };
 
   const handleViewModeChange = useCallback(
     (nextMode: BookmarkViewMode) => {
@@ -75,13 +118,17 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     void openExternalUrl(bookmark.originalUrl);
   }, []);
 
-  const handleRename = async (name: string): Promise<string | null> => {
+  const handleRename = async (
+    name: string,
+    colorKey: FolderColorKey
+  ): Promise<string | null> => {
     if (!folder) {
       return null;
     }
 
     try {
       await renameFolder(folder.id, name);
+      await setFolderColor(folder.id, colorKey);
       await reload();
       return null;
     } catch (error) {
@@ -98,12 +145,6 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     router.back();
   };
 
-  const tint = folder
-    ? folderColors[folder.colorKey ?? pickFolderColorKey(folder.id)]
-    : null;
-
-  const count = folder?.isPrivate ? "Private" : `${bookmarks.length} saved links`;
-
   return (
     <Screen>
       <TopAppBar
@@ -111,7 +152,9 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
         icon="folder-outline"
         onBack={() => router.back()}
         actions={
-          folder && status === "ready" ? (
+          folder &&
+          status === "ready" &&
+          (!folder.isPrivate || isUnlocked) ? (
             <>
               <IconButton
                 icon="sort-variant"
@@ -166,26 +209,6 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
           updateCellsBatchingPeriod={50}
           removeClippedSubviews
           contentContainerStyle={[styles.listContent, { paddingBottom: bottomInset }]}
-          ListHeaderComponent={
-            <View style={styles.header}>
-              <View style={[styles.folderMark, { backgroundColor: tint?.background }]}>
-                <MaterialCommunityIcons
-                  name={folder?.isPrivate ? "folder-lock" : "folder"}
-                  size={30}
-                  color={tint?.foreground}
-                />
-              </View>
-
-              <View style={styles.headerCopy}>
-                <AppText variant="headlineSmall" accessibilityRole="header">
-                  {folder?.name}
-                </AppText>
-                <AppText variant="bodyMedium" color={theme.colors.onSurfaceVariant}>
-                  {count}
-                </AppText>
-              </View>
-            </View>
-          }
           ListEmptyComponent={
             bookmarksStatus === "loading" ? (
               <LoadingState compact message="Loading links…" />
@@ -193,7 +216,13 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
               <EmptyState
                 icon="lock-outline"
                 title="This folder is locked"
-                description="Unlocking private folders arrives with the privacy and security milestone."
+                description="Unlock with biometrics or your device PIN to view these links."
+                action={{
+                  label: "Unlock folder",
+                  onPress: () => {
+                    void unlockCurrentFolder();
+                  },
+                }}
               />
             ) : bookmarksStatus === "error" ? (
               <ErrorState
@@ -246,6 +275,9 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
           setActionsVisible(false);
           setDeleteVisible(true);
         }}
+        onTogglePrivacy={() => {
+          void handleTogglePrivacy();
+        }}
       />
 
       <FolderNameDialog
@@ -253,6 +285,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
         title="Rename folder"
         description="Choose a new name for this folder."
         initialValue={folder?.name ?? ""}
+        initialColorKey={folder?.colorKey}
         confirmLabel="Save"
         onClose={() => setRenameVisible(false)}
         onSubmit={handleRename}

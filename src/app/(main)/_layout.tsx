@@ -17,7 +17,7 @@ export default function MainLayout() {
           animation: reduceMotion ? "none" : "shift",
           transitionSpec: {
             animation: "timing",
-            config: { duration: 160, useNativeDriver: true },
+            config: { duration: 120, useNativeDriver: true },
           },
           sceneStyle: { backgroundColor: theme.colors.background },
         }}

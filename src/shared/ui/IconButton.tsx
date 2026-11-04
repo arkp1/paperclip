@@ -32,7 +32,7 @@ export function IconButton({
       disabled={disabled}
       onPress={onPress}
       hitSlop={8}
-      scaleTo={0.9}
+      scaleTo={0.94}
       style={[
         styles.container,
         withBackground ? { backgroundColor: theme.colors.surfaceContainerLow } : null,

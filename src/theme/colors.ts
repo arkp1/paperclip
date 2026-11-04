@@ -64,8 +64,7 @@ export const lightColors: ColorScheme = {
   scrim: "rgba(24, 21, 31, 0.44)",
 };
 
-export const darkColors: ColorScheme = {
-  background: "#252331",
+export const darkColors: ColorScheme = {  background: "#252331",
   onBackground: "#F4F0FA",
   surface: "#252331",
   surfaceContainerLowest: "#201F2A",
@@ -95,6 +94,22 @@ export const darkColors: ColorScheme = {
   success: "#A9D5B5",
   warning: "#F1C66D",
   scrim: "rgba(0, 0, 0, 0.55)",
+};
+
+export const amoledColors: ColorScheme = {
+  ...darkColors,
+  background: "#000000",
+  onBackground: "#F4F0FA",
+  surface: "#000000",
+  surfaceContainerLowest: "#050505",
+  surfaceContainerLow: "#0B0B0B",
+  surfaceContainer: "#111111",
+  surfaceContainerHigh: "#181818",
+  onSurface: "#F4F0FA",
+  onSurfaceVariant: "#B9B3C4",
+  outline: "#6F6975",
+  outlineVariant: "#252525",
+  scrim: "rgba(0, 0, 0, 0.7)",
 };
 
 export const brandColors = {

@@ -12,8 +12,8 @@ folder (PRD, TRD, schema, user flows, UI/UX, design system, architecture).
 Implemented:
 
 - Three-tab shell (Home, Folders, Settings) with a floating capsule navigation
-  bar, horizontal tab swiping, and a Home screen with recent folders plus a
-  four-item Recently saved preview and View all.
+  bar, horizontal tab swiping, a four-item Recent folders carousel, and a
+  two-column Recently saved grid. View all is hidden when a section is empty.
 - Folder create, rename, delete (with the two documented deletion choices), and
   recent-folder ordering in SQLite.
 - Manual Save Link flow with URL validation, automatic title/description from
@@ -26,6 +26,22 @@ Implemented:
   All bookmarks; a heart marks favourited cards.
 - Extended Save-link FAB collapses to a circular + while scrolling down and
   expands on scroll-up.
+- Android Sharesheet capture for shared links with a two-action chooser:
+  **Save** opens the full form; **Quick save** stores immediately with a toast
+  and refreshes metadata in the background.
+- A 2×2 smart-collection grid (All bookmarks, Favourites, Uncategorized,
+  Private). Private folders live behind one biometric/device-PIN gate and are
+  not shown with private badges elsewhere. The gate is app-level, not at-rest
+  encryption, and clears when the app leaves the foreground.
+- Folder details keeps the folder name in the top app bar and omits the large
+  folder summary header.
+- Versioned public JSON export/import with folders, links, notes, favourites,
+  and cached preview images. Private folders are excluded.
+- Bookmark details screen with full preview, description, note, folder/source
+  metadata, open/copy actions, and the shared action menu.
+- Platform-aware metadata: YouTube oEmbed and Reddit's social-crawler Open
+  Graph share card provide titles and fillable previews where generic HTML is
+  blocked.
 - Local preview-image caching from Open Graph/Twitter metadata, rendered from
   app-managed files; preview refresh and asset cleanup on delete.
 - Persisted Grid / List / Cards layout and sort order (newest, oldest, title)
@@ -48,8 +64,22 @@ npm install
 npx expo start
 ```
 
-Open the project in Expo Go on the Android device. `expo-sqlite` and `@expo/ui`
-are included in Expo Go for SDK 58.
+Open the installed Paperclip development build on the Android device. Expo Go
+can no longer load the app once the native share-intent module is included.
+
+## Android development build
+
+The Android application ID is `com.arkp.paperclip` (set in `app.json`). It is
+required for a development/native build and for Google Play; Expo Go ignores it.
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest build --profile development --platform android
+```
+
+`eas.json` defines `development` (development client), `preview`, and
+`production` profiles. Share-intent capture, SQLCipher private folders, and
+backup/restore need this native build and cannot be verified in Expo Go.
 
 ## Checks
 

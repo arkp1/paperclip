@@ -6,8 +6,10 @@ import {
   deleteFolder,
   getAllFolders,
   renameFolder,
+  setFolderColor,
 } from "@/features/folders/data/folderRepository";
 import type { Folder, FolderDeleteStrategy } from "@/features/folders/types";
+import type { FolderColorKey } from "@/theme";
 
 type FoldersState = {
   folders: Folder[];
@@ -50,8 +52,8 @@ export function useFolders() {
   }, [load]);
 
   const create = useCallback(
-    async (name: string): Promise<Folder> => {
-      const folder = await createFolder({ name });
+    async (name: string, colorKey?: FolderColorKey): Promise<Folder> => {
+      const folder = await createFolder({ name, colorKey });
       await load();
       return folder;
     },
@@ -59,8 +61,15 @@ export function useFolders() {
   );
 
   const rename = useCallback(
-    async (id: string, name: string): Promise<void> => {
+    async (
+      id: string,
+      name: string,
+      colorKey?: FolderColorKey
+    ): Promise<void> => {
       await renameFolder(id, name);
+      if (colorKey) {
+        await setFolderColor(id, colorKey);
+      }
       await load();
     },
     [load]

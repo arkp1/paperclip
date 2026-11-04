@@ -17,8 +17,10 @@ export class MetadataUnavailableError extends Error {
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const YOUTUBE_TIMEOUT_MS = 6_000;
+const REDDIT_TIMEOUT_MS = 6_000;
 const MAX_HTML_CHARACTERS = 512_000;
 const MAX_OEMBED_CHARACTERS = 64_000;
+const MAX_REDDIT_CHARACTERS = 512_000;
 const MAX_TITLE_LENGTH = 300;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_SITE_NAME_LENGTH = 100;
@@ -29,6 +31,8 @@ const YOUTUBE_HOSTS = new Set([
   "music.youtube.com",
   "youtu.be",
 ]);
+
+const REDDIT_PREVIEW_USER_AGENT = "Twitterbot/1.0";
 
 const PRIVATE_HOST_PATTERN =
   /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i;
@@ -57,6 +61,13 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
       return await fetchYouTubeMetadata(validation.url);
     } catch {
       // Fall through to the regular HTML fetch if oEmbed is unavailable.
+    }
+  }
+
+  if (isRedditHost(target.hostname)) {
+    const redditMetadata = await fetchRedditMetadata(validation.url);
+    if (redditMetadata) {
+      return redditMetadata;
     }
   }
 
@@ -91,6 +102,58 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
       throw error;
     }
     throw new MetadataUnavailableError();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchRedditSocialPreview(
+  url: string
+): Promise<LinkMetadata | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REDDIT_TIMEOUT_MS);
+
+  try {
+    // Reddit serves compact Open Graph tags and its generated share card to
+    // social crawlers. This is the same preview X/Twitter shows for the link.
+    const response = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": REDDIT_PREVIEW_USER_AGENT,
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("text/html")) {
+      return null;
+    }
+
+    const html = (await response.text()).slice(0, MAX_HTML_CHARACTERS);
+    const metadata = parseMetadata(html, url);
+    if (!metadata.imageUrl) {
+      return null;
+    }
+
+    const cleanedTitle = metadata.title
+      ? metadata.title.replace(
+          /^From the .+? community on Reddit:\s*/i,
+          ""
+        )
+      : null;
+
+    return {
+      ...metadata,
+      title: cleanedTitle ?? metadata.title,
+      siteName: "Reddit",
+    };
+  } catch {
+    return null;
   } finally {
     clearTimeout(timeout);
   }
@@ -179,6 +242,122 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isYouTubeHost(hostname: string): boolean {
   return YOUTUBE_HOSTS.has(hostname.toLowerCase().replace(/^www\./, ""));
+}
+
+function isRedditHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "reddit.com" ||
+    normalized.endsWith(".reddit.com") ||
+    normalized === "redd.it"
+  );
+}
+
+async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
+  const preview = await fetchRedditSocialPreview(url);
+  if (preview) {
+    return preview;
+  }
+
+  const oembedEndpoint = `https://www.reddit.com/oembed?url=${encodeURIComponent(
+    url
+  )}`;
+  const oembedController = new AbortController();
+  const oembedTimeout = setTimeout(
+    () => oembedController.abort(),
+    REDDIT_TIMEOUT_MS
+  );
+
+  let title: string | null = null;
+  let canonicalUrl = url;
+
+  try {
+    const response = await fetch(oembedEndpoint, {
+      signal: oembedController.signal,
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("json")) {
+      return null;
+    }
+
+    const data: unknown = JSON.parse(
+      (await response.text()).slice(0, MAX_OEMBED_CHARACTERS)
+    );
+    if (!isRecord(data) || typeof data.title !== "string") {
+      return null;
+    }
+
+    title = normalizeText(data.title);
+    if (!title) {
+      return null;
+    }
+
+    if (typeof data.html === "string") {
+      const href = data.html.match(/href="([^"]*\/comments\/[^"]+)"/i)?.[1];
+      if (href) {
+        canonicalUrl =
+          readSafeRemoteUrl(decodeHtmlEntities(href), url) ?? canonicalUrl;
+      }
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(oembedTimeout);
+  }
+
+  let imageUrl: string | null = null;
+  const embedController = new AbortController();
+  const embedTimeout = setTimeout(
+    () => embedController.abort(),
+    REDDIT_TIMEOUT_MS
+  );
+
+  try {
+    const embedUrl = new URL(canonicalUrl);
+    embedUrl.hostname = "embed.reddit.com";
+    embedUrl.search = "";
+    embedUrl.hash = "";
+
+    const response = await fetch(embedUrl.toString(), {
+      signal: embedController.signal,
+      headers: { Accept: "text/html" },
+    });
+
+    if (response.ok) {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.toLowerCase().includes("text/html")) {
+        const html = (await response.text())
+          .slice(0, MAX_REDDIT_CHARACTERS)
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, "&");
+        const candidates =
+          html.match(/https:\/\/(?:preview|i)\.redd\.it\/[^"'\s\\]+/g) ?? [];
+        const selected =
+          candidates.find((candidate) =>
+            /\.(jpe?g|png|webp|gif)(\?|$)/i.test(candidate)
+          ) ?? candidates[0];
+        imageUrl = selected ? readSafeRemoteUrl(selected, canonicalUrl) : null;
+      }
+    }
+  } catch {
+    // The title is still useful if the embed page is unavailable.
+  } finally {
+    clearTimeout(embedTimeout);
+  }
+
+  return {
+    title: truncate(title, MAX_TITLE_LENGTH),
+    description: null,
+    siteName: "Reddit",
+    canonicalUrl,
+    imageUrl,
+  };
 }
 
 function parseMetadata(html: string, fallbackUrl: string): LinkMetadata {  const documentTitle = readElementText(html, "title");

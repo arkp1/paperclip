@@ -12,8 +12,13 @@ export const styles = StyleSheet.create({
     gap: spacing[6],
     marginBottom: spacing[2],
   },
-  smartCollections: {
-    gap: spacing[2],
+  smartGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[3],
+  },
+  smartGridItem: {
+    width: "48%",
   },
   sectionHeader: {
     flexDirection: "row",

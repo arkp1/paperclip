@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Share, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 
 import {
   moveBookmark,
@@ -13,7 +14,7 @@ import {
 } from "@/features/bookmarks/services/previewService";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
 import { getAllFolders } from "@/features/folders/data/folderRepository";
-import { FolderPickerDialog } from "@/features/folders/components/FolderPickerDialog";
+import { FolderPickerContent } from "@/features/folders/components/FolderPickerDialog";
 import type { Folder } from "@/features/folders/types";
 import { ActionRow } from "@/shared/ui/ActionRow";
 import { AppDialog } from "@/shared/ui/AppDialog";
@@ -30,6 +31,7 @@ type BookmarkActionsDialogProps = {
   visible: boolean;
   onClose: () => void;
   onChanged: () => void;
+  showDetails?: boolean;
 };
 
 export function BookmarkActionsDialog({
@@ -37,7 +39,9 @@ export function BookmarkActionsDialog({
   visible,
   onClose,
   onChanged,
+  showDetails = true,
 }: BookmarkActionsDialogProps) {
+  const router = useRouter();
   const { theme } = useTheme();
   const [mode, setMode] = useState<Mode>("actions");
   const [editTitle, setEditTitle] = useState("");
@@ -96,10 +100,11 @@ export function BookmarkActionsDialog({
 
   const openMove = async () => {
     setError(null);
-    setMode("move");
 
     try {
-      setFolders(await getAllFolders());
+      const loadedFolders = await getAllFolders();
+      setFolders(loadedFolders);
+      setMode("move");
     } catch {
       setError("Could not load your folders.");
     }
@@ -176,18 +181,26 @@ export function BookmarkActionsDialog({
 
   const isActionsMode = mode === "actions";
   const dialogTitle =
-    mode === "edit" ? "Edit link" : mode === "delete" ? "Delete this link?" : undefined;
+    mode === "edit"
+      ? "Edit link"
+      : mode === "delete"
+        ? "Delete this link?"
+        : mode === "move"
+          ? "Move to folder"
+          : undefined;
   const dialogDescription =
     mode === "edit"
       ? "Update the title or note. The URL is never changed here."
       : mode === "delete"
         ? `“${bookmark.title}” will be removed from Paperclip. This cannot be undone.`
-        : undefined;
+        : mode === "move"
+          ? "Choose a destination. Uncategorized removes it from its folder."
+          : undefined;
 
   return (
     <>
       <AppDialog
-        visible={visible && mode !== "move"}
+        visible={visible}
         onRequestClose={isActionsMode ? closeAll : () => setMode("actions")}
         title={dialogTitle}
         description={dialogDescription}
@@ -195,6 +208,19 @@ export function BookmarkActionsDialog({
           <>
             {isActionsMode ? (
               <>
+                {showDetails ? (
+                  <ActionRow
+                    icon="information-outline"
+                    label="View details"
+                    onPress={() => {
+                      closeAll();
+                      router.push({
+                        pathname: "/bookmarks/[bookmarkId]",
+                        params: { bookmarkId: bookmark.id },
+                      });
+                    }}
+                  />
+                ) : null}
                 <ActionRow
                   icon="pencil-outline"
                   label="Edit title & note"
@@ -270,6 +296,19 @@ export function BookmarkActionsDialog({
                   disabled={saving}
                 />
               </>
+            ) : mode === "move" ? (
+              <>
+                <Button
+                  label="Cancel"
+                  variant="text"
+                  onPress={() => setMode("actions")}
+                />
+                {error ? (
+                  <AppText variant="bodySmall" color={theme.colors.error}>
+                    {error}
+                  </AppText>
+                ) : null}
+              </>
             ) : (
               <>
                 <Button
@@ -323,20 +362,16 @@ export function BookmarkActionsDialog({
               </AppText>
             ) : null}
           </View>
+        ) : mode === "move" ? (
+          <FolderPickerContent
+            folders={folders}
+            selectedFolderId={bookmark.folderId}
+            onSelect={(folderId) => {
+              void applyMove(folderId);
+            }}
+          />
         ) : null}
       </AppDialog>
-
-      {mode === "move" ? (
-        <FolderPickerDialog
-          visible={visible}
-          folders={folders}
-          selectedFolderId={bookmark.folderId}
-          onSelect={(folderId) => {
-            void applyMove(folderId);
-          }}
-          onClose={() => setMode("actions")}
-        />
-      ) : null}
     </>
   );
 }

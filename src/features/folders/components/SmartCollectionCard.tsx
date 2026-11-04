@@ -44,17 +44,13 @@ export function SmartCollectionCard({
       </View>
 
       <View style={styles.copy}>
-        <AppText variant="titleMedium">{title}</AppText>
-        <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+        <AppText variant="titleSmall" numberOfLines={1}>
+          {title}
+        </AppText>
+        <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant} numberOfLines={2}>
           {subtitle}
         </AppText>
       </View>
-
-      <MaterialCommunityIcons
-        name="chevron-right"
-        size={24}
-        color={theme.colors.onSurfaceVariant}
-      />
     </ScalePressable>
   );
 }

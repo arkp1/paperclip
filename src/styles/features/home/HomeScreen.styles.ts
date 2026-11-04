@@ -48,4 +48,14 @@ export const styles = StyleSheet.create({
   gridItem: {
     width: "48%",
   },
+  horizontalContent: {
+    gap: spacing[3],
+    paddingRight: spacing[6],
+  },
+  folderSlide: {
+    width: 220,
+  },
+  bookmarkSlide: {
+    width: 250,
+  },
 });

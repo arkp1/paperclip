@@ -48,7 +48,7 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
       Animated.spring(indicatorX, {
         toValue: target,
         useNativeDriver: true,
-        speed: 22,
+        speed: 26,
         bounciness: 4,
       }).start();
     },

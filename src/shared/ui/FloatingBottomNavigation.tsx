@@ -76,12 +76,12 @@ export function FloatingBottomNavigation({
       Animated.parallel([
         Animated.timing(pillX, {
           toValue: layout.x,
-          duration: 180,
+          duration: 140,
           useNativeDriver: false,
         }),
         Animated.timing(pillWidth, {
           toValue: layout.width,
-          duration: 180,
+          duration: 140,
           useNativeDriver: false,
         }),
       ]).start();
@@ -269,7 +269,7 @@ function TabItem({
 
     Animated.timing(selection, {
       toValue: isFocused ? 1 : 0,
-      duration: 160,
+      duration: 130,
       useNativeDriver: true,
     }).start();
   }, [isFocused, reduceMotion, selection]);

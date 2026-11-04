@@ -8,6 +8,7 @@ type FolderActionsDialogProps = {
   onClose: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onTogglePrivacy: () => void;
 };
 
 export function FolderActionsDialog({
@@ -16,6 +17,7 @@ export function FolderActionsDialog({
   onClose,
   onRename,
   onDelete,
+  onTogglePrivacy,
 }: FolderActionsDialogProps) {
   return (
     <AppDialog
@@ -23,7 +25,12 @@ export function FolderActionsDialog({
       onRequestClose={onClose}
       actions={
         <>
-          <ActionRow icon="pencil-outline" label="Rename folder" onPress={onRename} />
+          <ActionRow
+            icon={folder?.isPrivate ? "lock-open-outline" : "lock-outline"}
+            label={folder?.isPrivate ? "Remove from private" : "Make private"}
+            onPress={onTogglePrivacy}
+          />
+          <ActionRow icon="pencil-outline" label="Edit name & color" onPress={onRename} />
           <ActionRow
             icon="delete-outline"
             label="Delete folder"

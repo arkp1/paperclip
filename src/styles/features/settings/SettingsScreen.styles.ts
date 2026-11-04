@@ -31,6 +31,24 @@ export const styles = StyleSheet.create({
   segmented: {
     width: "100%",
   },
+  accentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+  },
+  swatch: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  swatchCheck: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
   row: {
     flexDirection: "row",
     alignItems: "flex-start",

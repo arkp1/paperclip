@@ -55,7 +55,7 @@ export function AppDialog({
       scale.setValue(0.96);
       Animated.timing(scale, {
         toValue: 1,
-        duration: 180,
+        duration: 140,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
@@ -73,7 +73,7 @@ export function AppDialog({
 
     Animated.timing(scale, {
       toValue: 0.96,
-      duration: 120,
+      duration: 100,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(() => {
@@ -87,8 +87,10 @@ export function AppDialog({
     <Modal
       visible={mounted}
       transparent
-      animationType="none"
+      animationType={reduceMotion ? "none" : "fade"}
       statusBarTranslucent
+      navigationBarTranslucent
+      hardwareAccelerated
       onRequestClose={onRequestClose}
     >
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>

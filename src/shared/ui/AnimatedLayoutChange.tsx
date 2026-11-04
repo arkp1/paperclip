@@ -32,7 +32,7 @@ export function AnimatedLayoutChange({
     progress.setValue(0);
     Animated.timing(progress, {
       toValue: 1,
-      duration: 200,
+      duration: 150,
       useNativeDriver: true,
     }).start();
   }, [progress, reduceMotion, transitionKey]);

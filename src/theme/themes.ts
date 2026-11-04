@@ -1,4 +1,10 @@
-import { darkColors, lightColors, type ColorScheme } from "./colors";
+import {
+  amoledColors,
+  darkColors,
+  lightColors,
+  type ColorScheme,
+} from "./colors";
+import { applyAccent, type AccentKey } from "./accents";
 import { motion } from "./motion";
 import { shapes } from "./shapes";
 import { spacing } from "./spacing";
@@ -15,20 +21,29 @@ export type Theme = {
   motion: typeof motion;
 };
 
-export const lightTheme: Theme = {
-  scheme: "light",
-  colors: lightColors,
-  typography,
-  spacing,
-  shapes,
-  motion,
-};
+function createTheme(
+  scheme: ThemeScheme,
+  accent: AccentKey,
+  amoled: boolean
+): Theme {
+  const base =
+    scheme === "dark"
+      ? amoled
+        ? amoledColors
+        : darkColors
+      : lightColors;
 
-export const darkTheme: Theme = {
-  scheme: "dark",
-  colors: darkColors,
-  typography,
-  spacing,
-  shapes,
-  motion,
-};
+  return {
+    scheme,
+    colors: applyAccent(base, accent, scheme),
+    typography,
+    spacing,
+    shapes,
+    motion,
+  };
+}
+
+export const lightTheme = createTheme("light", "violet", false);
+export const darkTheme = createTheme("dark", "violet", false);
+
+export { createTheme };
