@@ -54,8 +54,8 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await reload();
       await refreshMissingPreviews();
+      await reload();
     } finally {
       setRefreshing(false);
     }
