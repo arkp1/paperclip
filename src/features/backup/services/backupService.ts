@@ -243,9 +243,15 @@ export async function applyBackup(
           : null;
 
       const image = document.images.find((entry) => entry.bookmarkId === id);
+      const imageExtension = image?.extension.toLowerCase() ?? null;
       let previewImagePath: string | null = null;
-      if (image && IMAGE_EXTENSIONS.has(image.extension)) {
+      if (image && imageExtension && IMAGE_EXTENSIONS.has(imageExtension)) {
         try {
+          const bytes = decodeBase64(image.base64);
+          if (!matchesImageSignature(bytes, imageExtension)) {
+            throw new Error("Preview image content does not match its extension.");
+          }
+
           const directory = new Directory(
             Paths.document,
             "paperclip",
@@ -253,16 +259,16 @@ export async function applyBackup(
             "public"
           );
           directory.create({ intermediates: true, idempotent: true });
-          const file = new File(directory, `${id}.${image.extension}`);
+          const file = new File(directory, `${id}.${imageExtension}`);
           if (file.exists) {
             file.delete();
           }
           file.create({ intermediates: true });
-          await file.write(decodeBase64(image.base64));
+          await file.write(bytes);
           if (!file.exists || file.size === 0) {
             throw new Error("Preview image was not written.");
           }
-          previewImagePath = `paperclip/previews/public/${id}.${image.extension}`;
+          previewImagePath = `paperclip/previews/public/${id}.${imageExtension}`;
           inserted.images += 1;
         } catch {
           previewImagePath = null;
@@ -421,6 +427,63 @@ function normalizePreviewStatus(value: string | null): string {
 function extensionFromPath(path: string): string | null {
   const extension = path.split(".").pop()?.toLowerCase();
   return extension && IMAGE_EXTENSIONS.has(extension) ? extension : null;
+}
+
+/**
+ * Rejects preview payloads whose magic bytes do not match the declared
+ * extension before anything is written to app storage.
+ */
+function matchesImageSignature(bytes: Uint8Array, extension: string): boolean {
+  if (bytes.length < 12) {
+    return false;
+  }
+
+  if (extension === "jpg" || extension === "jpeg") {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (extension === "png") {
+    return (
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a
+    );
+  }
+  if (extension === "gif") {
+    return (
+      bytes[0] === 0x47 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      (bytes[3] === 0x38 && (bytes[4] === 0x37 || bytes[4] === 0x39)) &&
+      bytes[5] === 0x61
+    );
+  }
+  if (extension === "webp") {
+    return (
+      bytes[0] === 0x52 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x46 &&
+      bytes[3] === 0x46 &&
+      bytes[8] === 0x57 &&
+      bytes[9] === 0x45 &&
+      bytes[10] === 0x42 &&
+      bytes[11] === 0x50
+    );
+  }
+  if (extension === "avif") {
+    return (
+      bytes[4] === 0x66 &&
+      bytes[5] === 0x74 &&
+      bytes[6] === 0x79 &&
+      bytes[7] === 0x70
+    );
+  }
+
+  return false;
 }
 
 const BASE64_ALPHABET =

@@ -46,7 +46,9 @@ export function HomeScreen() {
     refresh: refreshBookmarks,
     reload: reloadBookmarks,
   } = useRecentBookmarks();
-  const refreshing = foldersRefreshing || bookmarksRefreshing;
+  const [previewRefreshing, setPreviewRefreshing] = useState(false);
+  const refreshing =
+    foldersRefreshing || bookmarksRefreshing || previewRefreshing;
   const [selectedBookmark, setSelectedBookmark] = useState<
     Bookmark | BookmarkView | null
   >(null);
@@ -69,8 +71,15 @@ export function HomeScreen() {
   );
 
   const refreshAll = useCallback(async () => {
-    await refreshMissingPreviews();
-    await Promise.all([refreshFolders(), refreshBookmarks()]);
+    setPreviewRefreshing(true);
+    try {
+      await refreshMissingPreviews();
+      await Promise.all([refreshFolders(), refreshBookmarks()]);
+    } catch (error) {
+      console.warn("Could not refresh the library.", error);
+    } finally {
+      setPreviewRefreshing(false);
+    }
   }, [refreshBookmarks, refreshFolders]);
 
   return (

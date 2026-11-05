@@ -34,20 +34,11 @@ export function validateHttpUrl(rawUrl: string): HttpUrlValidation {
     return { valid: false, message: "Enter a link with a website address." };
   }
 
-  if (isLoopbackIpv6(parsed.hostname)) {
-    return { valid: false, message: "That destination is not allowed." };
-  }
-
   return {
     valid: true,
     url: trimmed,
     domain: parsed.hostname.replace(/^www\./i, ""),
   };
-}
-
-function isLoopbackIpv6(hostname: string): boolean {
-  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  return normalized === "::1" || normalized === "0:0:0:0:0:0:0:1";
 }
 
 /**

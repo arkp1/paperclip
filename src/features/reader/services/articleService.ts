@@ -19,7 +19,7 @@ const MAX_HTML_BYTES = 3_000_000;
 const MAX_REDIRECTS = 5;
 const REQUEST_TIMEOUT_MS = 10_000;
 const PRIVATE_HOST_PATTERN =
-  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$)/i;
+  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|198\.(1[89]|2\d)\.|\[?(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe[89ab][0-9a-f]:))/i;
 
 /**
  * Loads cached article text for a bookmark, or downloads and caches it.

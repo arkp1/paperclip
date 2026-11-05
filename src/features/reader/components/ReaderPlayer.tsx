@@ -30,6 +30,7 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
   const rateRef = useRef(1);
   const currentChunk = useRef(0);
   const cancelled = useRef(false);
+  const playbackGeneration = useRef(0);
   const expansion = useRef(new Animated.Value(0)).current;
 
   const { chunks, offsets, totalChars } = useMemo(
@@ -38,14 +39,23 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
   );
 
   const stop = () => {
+    playbackGeneration.current += 1;
     cancelled.current = true;
     setSpeaking(false);
     void Speech.stop();
   };
 
-  const speakFrom = (index: number, speed: number) => {
-    if (cancelled.current || index >= chunks.length) {
-      if (index >= chunks.length) {
+  const speakFrom = (index: number, speed: number, generation: number) => {
+    if (
+      cancelled.current ||
+      generation !== playbackGeneration.current ||
+      index >= chunks.length
+    ) {
+      if (
+        !cancelled.current &&
+        generation === playbackGeneration.current &&
+        index >= chunks.length
+      ) {
         setProgress(1);
         setSpeaking(false);
       }
@@ -58,14 +68,37 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
     Speech.speak(chunks[index], {
       rate: speed,
       onBoundary: (event: { charIndex: number; charLength: number }) => {
+        if (generation !== playbackGeneration.current) {
+          return;
+        }
         setProgress(
           Math.min(1, (base + (event.charIndex ?? 0)) / totalChars)
         );
       },
-      onDone: () => speakFrom(index + 1, rateRef.current),
-      onStopped: () => setSpeaking(false),
-      onError: () => setSpeaking(false),
+      onDone: () => {
+        if (generation === playbackGeneration.current) {
+          speakFrom(index + 1, rateRef.current, generation);
+        }
+      },
+      onStopped: () => {
+        if (generation === playbackGeneration.current) {
+          setSpeaking(false);
+        }
+      },
+      onError: () => {
+        if (generation === playbackGeneration.current) {
+          setSpeaking(false);
+        }
+      },
     });
+  };
+
+  const startPlayback = (index: number, speed: number) => {
+    playbackGeneration.current += 1;
+    const generation = playbackGeneration.current;
+    cancelled.current = false;
+    setSpeaking(true);
+    speakFrom(index, speed, generation);
   };
 
   const togglePlayback = () => {
@@ -79,9 +112,7 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
       currentChunk.current = 0;
     }
 
-    cancelled.current = false;
-    setSpeaking(true);
-    speakFrom(currentChunk.current, rateRef.current);
+    startPlayback(currentChunk.current, rateRef.current);
   };
 
   const changeRate = (next: number) => {
@@ -92,16 +123,22 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
       return;
     }
 
+    playbackGeneration.current += 1;
+    const generation = playbackGeneration.current;
     cancelled.current = true;
     void Speech.stop().then(() => {
+      if (generation !== playbackGeneration.current) {
+        return;
+      }
       cancelled.current = false;
       setSpeaking(true);
-      speakFrom(currentChunk.current, next);
+      speakFrom(currentChunk.current, next, generation);
     });
   };
 
   useEffect(() => {
     return () => {
+      playbackGeneration.current += 1;
       cancelled.current = true;
       void Speech.stop();
     };

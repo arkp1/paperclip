@@ -288,8 +288,7 @@ export async function findBookmarkByUrl(rawUrl: string): Promise<Bookmark | null
   return match ? mapBookmarkRow(match) : null;
 }
 
-export async function setBookmarkFavorite(
-  id: string,
+export async function setBookmarkFavorite(  id: string,
   isFavorite: boolean
 ): Promise<void> {
   const database = await getDatabase();
@@ -361,6 +360,22 @@ export async function updateBookmarkPreviewAsset(
     input.previewStatus,
     input.previewFetchedAt,
     Date.now(),
+    id
+  );
+}
+
+/**
+ * Records a failed preview refresh without touching the image or metadata.
+ */
+export async function markBookmarkPreviewFailed(id: string): Promise<void> {
+  const database = await getDatabase();
+  const now = Date.now();
+  await database.runAsync(
+    `UPDATE bookmarks
+     SET preview_status = 'failed', preview_fetched_at = ?, updated_at = ?
+     WHERE id = ?`,
+    now,
+    now,
     id
   );
 }

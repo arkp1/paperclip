@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Share, View } from "react-native";
+import { Alert, Platform, Share, ToastAndroid, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 
@@ -124,6 +124,9 @@ export function BookmarkActionsDialog({
     try {
       await Clipboard.setStringAsync(bookmark.originalUrl);
       closeAll();
+      if (Platform.OS === "android" && Number(Platform.Version) < 33) {
+        ToastAndroid.show("Link copied", ToastAndroid.SHORT);
+      }
     } catch {
       Alert.alert("Could not copy the link", "Please try again.");
     }

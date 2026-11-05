@@ -2,6 +2,7 @@ import { getDatabase } from "@/core/database/database";
 import {
   getBookmarkById,
   deleteBookmark,
+  markBookmarkPreviewFailed,
   updateBookmarkMetadata,
   updateBookmarkPreviewAsset,
 } from "@/features/bookmarks/data/bookmarkRepository";
@@ -126,8 +127,10 @@ export async function refreshMissingPreviews(limit = 30): Promise<void> {
   );
 
   for (const row of rows) {
-    await refreshBookmarkPreview(row.id).catch(() => {
-      // One failed preview must not stop the rest of the refresh.
+    await refreshBookmarkPreview(row.id).catch(async () => {
+      await markBookmarkPreviewFailed(row.id).catch(() => {
+        // Continue with the remaining previews even if the marker fails.
+      });
     });
   }
 }
