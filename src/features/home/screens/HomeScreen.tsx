@@ -69,8 +69,8 @@ export function HomeScreen() {
   );
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshFolders(), refreshBookmarks()]);
     await refreshMissingPreviews();
+    await Promise.all([refreshFolders(), refreshBookmarks()]);
   }, [refreshBookmarks, refreshFolders]);
 
   return (

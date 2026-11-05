@@ -135,6 +135,9 @@ export async function exportLibraryBackup(): Promise<BackupSummary | null> {
   };
 }
 
+/**
+ * Lets the user choose a JSON backup file without broad storage permissions.
+ */
 export async function pickBackupFile(): Promise<PickedBackup | null> {
   const picked = await File.pickFileAsync({
     mimeTypes: ["application/json"],
@@ -326,11 +329,14 @@ function validateBackup(value: unknown): BackupDocument {
 
   const folders = value.folders.filter(isRecord);
   const bookmarks = value.bookmarks.filter(isRecord);
-  const images = Array.isArray(value.images)
-    ? value.images.filter(isBackupImage)
-    : [];
+  const rawImages = Array.isArray(value.images) ? value.images : [];
+  const images = rawImages.filter(isBackupImage);
 
-  if (folders.length !== value.folders.length || bookmarks.length !== value.bookmarks.length) {
+  if (
+    folders.length !== value.folders.length ||
+    bookmarks.length !== value.bookmarks.length ||
+    images.length !== rawImages.length
+  ) {
     throw new Error("This backup contains invalid records.");
   }
 
@@ -352,9 +358,34 @@ function isBackupImage(value: unknown): value is BackupImage {
   }
   return (
     typeof value.bookmarkId === "string" &&
+    SAFE_ID_PATTERN.test(value.bookmarkId) &&
     typeof value.extension === "string" &&
+    IMAGE_EXTENSIONS.has(value.extension.toLowerCase()) &&
     typeof value.base64 === "string" &&
-    value.base64.length <= MAX_IMAGE_BASE64_CHARACTERS
+    value.base64.length <= MAX_IMAGE_BASE64_CHARACTERS &&
+    isValidBase64(value.base64)
+  );
+}
+
+/**
+ * Strict standard Base64 validation: length, alphabet, and padding position.
+ * A malformed image must reject the whole backup before any library mutation.
+ */
+function isValidBase64(value: string): boolean {
+  const compact = value.replace(/\s+/g, "");
+  if (
+    compact.length === 0 ||
+    compact.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(compact)
+  ) {
+    return false;
+  }
+
+  const firstPadding = compact.indexOf("=");
+  return (
+    firstPadding === -1 ||
+    firstPadding === compact.length - 1 ||
+    firstPadding === compact.length - 2
   );
 }
 

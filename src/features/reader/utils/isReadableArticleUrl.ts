@@ -16,6 +16,10 @@ const SOCIAL_OR_MEDIA_HOSTS = [
 
 const NON_ARTICLE_EXTENSION = /\.(pdf|jpe?g|png|gif|webp|avif|mp4|mov|webm|mp3|m4a|zip|apk)(\?|$)/i;
 
+/**
+ * Article-like links open in the in-app reader. Social, video, and direct
+ * media links are intentionally excluded.
+ */
 export function isReadableArticleUrl(rawUrl: string): boolean {
   try {
     const url = new URL(rawUrl);

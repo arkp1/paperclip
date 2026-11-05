@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, Share, Text } from "react-native";
 import { useRouter } from "expo-router";
 
 import { moveBookmark } from "@/features/bookmarks/data/bookmarkRepository";
 import { deleteBookmarkWithAssets } from "@/features/bookmarks/services/previewService";
+import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
 import { FolderPickerContent } from "@/features/folders/components/FolderPickerDialog";
 import { getAllFolders } from "@/features/folders/data/folderRepository";
 import type { Folder } from "@/features/folders/types";
@@ -25,14 +26,29 @@ type ReaderScreenProps = {
   bookmarkId: string;
 };
 
+/**
+ * Distraction-free article view with offline cached content and listening
+ * controls. Opening the reader requires article-like bookmark content.
+ */
 export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const router = useRouter();
   const { theme } = useTheme();
   const { bookmark, blocks, wordCount, status, errorMessage, reload } =
     useArticleReader(bookmarkId);
+  const { isUnlocked } = usePrivateSpaceSession();
+  const previousUnlocked = useRef(isUnlocked);
   const [actionsVisible, setActionsVisible] = useState(false);
   const [moveVisible, setMoveVisible] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
+
+  useEffect(() => {
+    if (previousUnlocked.current && !isUnlocked) {
+      setActionsVisible(false);
+      setMoveVisible(false);
+      void reload();
+    }
+    previousUnlocked.current = isUnlocked;
+  }, [isUnlocked, reload]);
 
   const openMove = async () => {
     setActionsVisible(false);
@@ -93,7 +109,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         icon="book-open-page-variant-outline"
         onBack={() => router.back()}
         actions={
-          status === "ready" ? (
+          bookmark && (status === "ready" || status === "error") ? (
             <IconButton
               icon="dots-vertical"
               label="Reading options"

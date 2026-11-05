@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import type { Bookmark } from "@/features/bookmarks/types";
@@ -16,6 +16,10 @@ type ReaderState = {
   errorMessage: string | null;
 };
 
+/**
+ * Loads the readable bookmark and cached article text. A generation guard
+ * prevents stale requests from overwriting newer reader state.
+ */
 export function useArticleReader(bookmarkId: string) {
   const [state, setState] = useState<ReaderState>({
     bookmark: null,
@@ -24,31 +28,58 @@ export function useArticleReader(bookmarkId: string) {
     status: "loading",
     errorMessage: null,
   });
+  const generation = useRef(0);
 
   const load = useCallback(async () => {
+    const run = generation.current + 1;
+    generation.current = run;
+    setState({
+      bookmark: null,
+      blocks: [],
+      wordCount: 0,
+      status: "loading",
+      errorMessage: null,
+    });
+
+    let loadedBookmark: Bookmark | null = null;
+
     try {
-      const bookmark = await getReadableBookmarkById(bookmarkId);
-      if (!bookmark) {
-        setState((previous) => ({
-          ...previous,
-          status: "not_found",
+      loadedBookmark = await getReadableBookmarkById(bookmarkId);
+      if (run !== generation.current) {
+        return;
+      }
+
+      if (!loadedBookmark) {
+        setState({
           bookmark: null,
-        }));
+          blocks: [],
+          wordCount: 0,
+          status: "not_found",
+          errorMessage: null,
+        });
         return;
       }
 
       const article = await loadArticle(bookmarkId);
+      if (run !== generation.current) {
+        return;
+      }
+
       setState({
-        bookmark,
+        bookmark: loadedBookmark,
         blocks: article.blocks,
         wordCount: article.wordCount,
         status: "ready",
         errorMessage: null,
       });
     } catch (error) {
+      if (run !== generation.current) {
+        return;
+      }
       console.warn("Could not load the article.", error);
       setState((previous) => ({
         ...previous,
+        bookmark: loadedBookmark ?? previous.bookmark,
         status: "error",
         errorMessage:
           "This article could not be prepared. Open the original or try refreshing the link.",

@@ -16,6 +16,10 @@ type ReaderPlayerProps = {
 
 const SPEEDS = [0.75, 1, 1.25, 1.5];
 
+/**
+ * Mini listening player with a spring-expanded sheet, progress, and speed
+ * controls. Speech is chunked to respect the platform input limit.
+ */
 export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -300,21 +304,44 @@ function buildSpeechChunks(paragraphs: string[]): {
   let current = "";
   let offset = 0;
 
+  const flush = () => {
+    if (!current) {
+      return;
+    }
+    chunks.push(current);
+    offsets.push(offset);
+    offset += current.length;
+    current = "";
+  };
+
   for (const paragraph of paragraphs) {
-    if (current.length + paragraph.length + 2 > maxLength && current) {
-      chunks.push(current);
-      offsets.push(offset);
-      offset += current.length;
-      current = "";
+    if (paragraph.length > maxLength) {
+      flush();
+      let rest = paragraph;
+      while (rest.length > maxLength) {
+        let cut = rest.lastIndexOf(" ", maxLength);
+        if (cut < Math.floor(maxLength * 0.5)) {
+          cut = maxLength;
+        }
+        const part = rest.slice(0, cut).trim();
+        if (part) {
+          chunks.push(part);
+          offsets.push(offset);
+          offset += part.length;
+        }
+        rest = rest.slice(cut).trim();
+      }
+      current = rest;
+      continue;
+    }
+
+    if (current.length + paragraph.length + 2 > maxLength) {
+      flush();
     }
     current = current ? `${current}\n\n${paragraph}` : paragraph;
   }
 
-  if (current) {
-    chunks.push(current);
-    offsets.push(offset);
-    offset += current.length;
-  }
+  flush();
 
   return { chunks, offsets, totalChars: Math.max(1, offset) };
 }

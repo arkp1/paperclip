@@ -110,8 +110,8 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await reloadBookmarks();
       await refreshMissingPreviews();
+      await reloadBookmarks();
     } finally {
       setRefreshing(false);
     }

@@ -14,6 +14,10 @@ type ReaderActionMenuProps = {
   onMove: () => void;
 };
 
+/**
+ * In-screen reader actions menu, matching the visual treatment of the sort
+ * popover instead of opening another modal window.
+ */
 export function ReaderActionMenu({
   visible,
   onClose,

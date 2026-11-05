@@ -2,6 +2,7 @@ import { SegmentedControl } from "@expo/ui/community/segmented-control";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { Switch } from "@expo/ui/jetpack-compose";
+import { semantics } from "@expo/ui/jetpack-compose/modifiers";
 import { ScrollView, View } from "react-native";
 
 import { AppText } from "@/shared/ui/AppText";
@@ -130,6 +131,9 @@ export function SettingsScreen() {
                 <Switch
                   value={amoled}
                   onCheckedChange={setAmoled}
+                  modifiers={[
+                    semantics({ contentDescription: "AMOLED black background" }),
+                  ]}
                 />
               </MaterialHost>
             </View>

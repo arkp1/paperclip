@@ -12,6 +12,8 @@ import {
   deletePreviewImage,
 } from "@/core/files/previewFileStore";
 
+const PREVIEW_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+
 /**
  * Caches the preview image for a freshly saved bookmark. The row already
  * exists, so a failed image download only degrades the preview; it never
@@ -113,8 +115,13 @@ export async function refreshMissingPreviews(limit = 30): Promise<void> {
          b.preview_image_path IS NULL
          OR b.preview_status IN ('pending', 'partial', 'failed')
        )
+       AND (
+         b.preview_fetched_at IS NULL
+         OR b.preview_fetched_at < ?
+       )
      ORDER BY b.created_at DESC
      LIMIT ?`,
+    Date.now() - PREVIEW_RETRY_COOLDOWN_MS,
     limit
   );
 
