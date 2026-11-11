@@ -14,12 +14,12 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: spacing[3],
     overflow: "hidden",
-    elevation: 8,
+    elevation: 30,
     shadowColor: "#1A1625",
     shadowOpacity: 0.18,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
-    zIndex: 20,
+    zIndex: 30,
   },
   progressTrack: {
     position: "absolute",
@@ -41,11 +41,13 @@ export const styles = StyleSheet.create({
     gap: 1,
   },
   miniTitle: {
+    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
   },
   miniMeta: {
+    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 11,
     lineHeight: 15,
   },
@@ -85,12 +87,14 @@ export const styles = StyleSheet.create({
     gap: spacing[2],
   },
   eyebrow: {
+    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
     letterSpacing: 1.5,
   },
   sheetTitle: {
+    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 24,
     lineHeight: 30,
     fontWeight: "700",
@@ -106,8 +110,33 @@ export const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
+  seekArea: {
+    height: 36,
+    justifyContent: "center",
+  },
+  seekTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "visible",
+  },
+  seekFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  seekThumb: {
+    position: "absolute",
+    top: -5,
+    width: 16,
+    height: 16,
+    marginLeft: -8,
+    borderRadius: 8,
+    borderWidth: 2,
+  },
   controls: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[6],
   },
   playButton: {
     width: 72,
@@ -127,8 +156,12 @@ export const styles = StyleSheet.create({
     borderRadius: 999,
   },
   speedText: {
+    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 13,
     lineHeight: 18,
     fontWeight: "600",
   },
 });
+
+
+

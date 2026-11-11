@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
 import { validateFolderName } from "@/features/folders/validation";
@@ -7,6 +7,7 @@ import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { TextField } from "@/shared/ui/TextField";
+import { MaterialCommunityIcons } from "@/shared/ui/icons";
 import { styles } from "@/styles/features/folders/FolderNameDialog.styles";
 import {
   defaultFolderColorKey,
@@ -46,14 +47,16 @@ export function FolderNameDialog({
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const wasVisible = useRef(false);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && !wasVisible.current) {
       setName(initialValue);
       setColorKey(initialColorKey ?? defaultFolderColorKey);
       setError(null);
       setSubmitting(false);
     }
+    wasVisible.current = visible;
   }, [initialColorKey, initialValue, visible]);
 
   const handleConfirm = async () => {
@@ -153,11 +156,10 @@ export function FolderNameDialog({
                   ]}
                 >
                   {selected ? (
-                    <View
-                      style={[
-                        styles.check,
-                        { backgroundColor: folderColors[key].foreground },
-                      ]}
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={19}
+                      color={folderColors[key].foreground}
                     />
                   ) : null}
                 </ScalePressable>

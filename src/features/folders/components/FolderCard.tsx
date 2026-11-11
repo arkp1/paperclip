@@ -5,6 +5,7 @@ import type { Folder } from "@/features/folders/types";
 import { AppText } from "@/shared/ui/AppText";
 import { IconButton } from "@/shared/ui/IconButton";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
 import { styles } from "@/styles/features/folders/FolderCard.styles";
 import { folderColors, pickFolderColorKey, useTheme } from "@/theme";
@@ -12,7 +13,7 @@ import { folderColors, pickFolderColorKey, useTheme } from "@/theme";
 type FolderCardProps = {
   folder: Folder;
   onPress: (folder: Folder) => void;
-  onMore?: (folder: Folder) => void;
+  onMore?: (folder: Folder, anchor: MenuAnchor) => void;
 };
 
 function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
@@ -58,7 +59,12 @@ function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
         <IconButton
           icon="dots-vertical"
           label={`More actions for ${folder.name}`}
-          onPress={() => onMore(folder)}
+          onPress={(event) =>
+            onMore(folder, {
+              x: event.nativeEvent.pageX,
+              y: event.nativeEvent.pageY,
+            })
+          }
           size={20}
           color={theme.colors.onSurfaceVariant}
         />

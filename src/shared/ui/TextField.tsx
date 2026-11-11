@@ -64,6 +64,7 @@ export function TextField({
         minLines={multiline ? 3 : undefined}
         maxLength={maxLength}
         isError={hasError}
+        textStyle={{ fontFamily: "GoogleSansFlex-Regular" }}
         shape={Shape.RoundedCorner({
           cornerRadii: { topStart: 12, topEnd: 12, bottomStart: 12, bottomEnd: 12 },
         })}
@@ -97,21 +98,23 @@ export function TextField({
         modifiers={[fillMaxWidth()]}
       >
         <OutlinedTextField.Label>
-          <Text>{label}</Text>
+          <Text style={{ fontFamily: "GoogleSansFlex-Regular" }}>{label}</Text>
         </OutlinedTextField.Label>
 
         {placeholder ? (
           <OutlinedTextField.Placeholder>
-            <Text>{placeholder}</Text>
+            <Text style={{ fontFamily: "GoogleSansFlex-Regular" }}>{placeholder}</Text>
           </OutlinedTextField.Placeholder>
         ) : null}
 
         {error ? (
           <OutlinedTextField.SupportingText>
-            <Text>{error}</Text>
+            <Text style={{ fontFamily: "GoogleSansFlex-Regular" }}>{error}</Text>
           </OutlinedTextField.SupportingText>
         ) : null}
       </OutlinedTextField>
     </MaterialHost>
   );
 }
+
+

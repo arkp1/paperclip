@@ -112,8 +112,12 @@ export function Button({
         shape={Shape.Pill({})}
         modifiers={[fillMaxSize()]}
       >
-        <Text>{loading ? `${label}…` : label}</Text>
+        <Text style={{ fontFamily: "GoogleSansFlex-Regular" }}>
+          {loading ? `${label}…` : label}
+        </Text>
       </Component>
     </MaterialHost>
   );
 }
+
+

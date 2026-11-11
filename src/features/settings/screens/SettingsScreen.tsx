@@ -1,9 +1,15 @@
-import { SegmentedControl } from "@expo/ui/community/segmented-control";
-import Constants from "expo-constants";
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { Switch } from "@expo/ui/jetpack-compose";
 import { semantics } from "@expo/ui/jetpack-compose/modifiers";
-import { ScrollView, View } from "react-native";
+import Constants from "expo-constants";
+import { ScrollView, View, Platform } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { AppText } from "@/shared/ui/AppText";
 import { MaterialHost } from "@/shared/ui/MaterialHost";
@@ -23,14 +29,37 @@ const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
 ];
 
 export function SettingsScreen() {
-  const { theme, mode, setMode, accent, setAccent, amoled, setAmoled } = useTheme();
+  const {
+    theme,
+    mode,
+    setMode,
+    accent,
+    setAccent,
+    amoled,
+    setAmoled,
+    dynamic,
+    setDynamic,
+  } = useTheme();
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
   const version = Constants.expoConfig?.version ?? "1.0.0";
+  const [segmentWidth, setSegmentWidth] = useState(0);
   const selectedIndex = Math.max(
     0,
     THEME_OPTIONS.findIndex((option) => option.mode === mode)
   );
+  const selection = useSharedValue(selectedIndex);
+
+  useEffect(() => {
+    selection.value = withTiming(selectedIndex, {
+      duration: 220,
+      easing: Easing.bezier(0.2, 0, 0, 1),
+    });
+  }, [selectedIndex, selection]);
+
+  const selectionStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: selection.value * (segmentWidth + 2) }],
+  }));
 
   return (
     <Screen>
@@ -56,20 +85,59 @@ export function SettingsScreen() {
               </AppText>
             </View>
 
-            <SegmentedControl
-              values={THEME_OPTIONS.map((option) => option.label)}
-              selectedIndex={selectedIndex}
-              onValueChange={(label) => {
-                const option = THEME_OPTIONS.find((entry) => entry.label === label);
-                if (option) {
-                  setMode(option.mode);
-                }
+            <View
+              style={[
+                styles.segmented,
+                {
+                  backgroundColor: theme.colors.surfaceContainer,
+                  borderColor: theme.colors.outlineVariant,
+                },
+              ]}
+              onLayout={(event) => {
+                const available = event.nativeEvent.layout.width - 6 - 4;
+                setSegmentWidth(Math.max(0, available / 3));
               }}
-              tintColor={theme.colors.primary}
-              appearance={theme.scheme}
-              accessibilityLabel="Theme"
-              style={styles.segmented}
-            />
+            >
+              {segmentWidth > 0 ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.segmentPill,
+                    {
+                      width: segmentWidth,
+                      backgroundColor: theme.colors.primaryContainer,
+                    },
+                    selectionStyle,
+                  ]}
+                />
+              ) : null}
+              {THEME_OPTIONS.map((option) => {
+                const selected = option.mode === mode;
+                return (
+                  <ScalePressable
+                    key={option.mode}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${option.label} theme`}
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => setMode(option.mode)}
+                    pressFeedback="scale"
+                    scaleTo={0.97}
+                    style={styles.segment}
+                  >
+                    <AppText
+                      variant="labelLarge"
+                      color={
+                        selected
+                          ? theme.colors.onPrimaryContainer
+                          : theme.colors.onSurfaceVariant
+                      }
+                    >
+                      {option.label}
+                    </AppText>
+                  </ScalePressable>
+                );
+              })}
+            </View>
           </View>
 
           <View
@@ -137,6 +205,35 @@ export function SettingsScreen() {
                 />
               </MaterialHost>
             </View>
+
+            {Platform.OS === "android" && Number(Platform.Version) >= 31 ? (
+              <View
+                style={[
+                  styles.row,
+                  {
+                    borderTopWidth: 1,
+                    borderTopColor: theme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                <View style={styles.rowCopy}>
+                  <AppText variant="bodyLarge">Dynamic colour</AppText>
+                  <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+                    Native Material controls follow your Android wallpaper. App
+                    surfaces keep the selected accent.
+                  </AppText>
+                </View>
+                <MaterialHost matchContents>
+                  <Switch
+                    value={dynamic}
+                    onCheckedChange={setDynamic}
+                    modifiers={[
+                      semantics({ contentDescription: "Dynamic colour" }),
+                    ]}
+                  />
+                </MaterialHost>
+              </View>
+            ) : null}
           </View>
         </View>
 

@@ -20,6 +20,7 @@ import {
 import { DeleteFolderDialog } from "@/features/folders/components/DeleteFolderDialog";
 import { FolderActionsDialog } from "@/features/folders/components/FolderActionsDialog";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import {
   deleteFolder,
   renameFolder,
@@ -59,7 +60,9 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
   } = useFolderBookmarks(folderId, sortMode);
 
   const [actionsVisible, setActionsVisible] = useState(false);
+  const [actionsAnchor, setActionsAnchor] = useState<MenuAnchor | null>(null);
   const [sortVisible, setSortVisible] = useState(false);
+  const [sortAnchor, setSortAnchor] = useState<MenuAnchor | null>(null);
   const [renameVisible, setRenameVisible] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | null>(null);
@@ -175,12 +178,24 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
               <IconButton
                 icon="sort-variant"
                 label="Sort bookmarks"
-                onPress={() => setSortVisible(true)}
+                onPress={(event) => {
+                  setSortAnchor({
+                    x: event.nativeEvent.pageX,
+                    y: event.nativeEvent.pageY,
+                  });
+                  setSortVisible(true);
+                }}
               />
               <IconButton
                 icon="dots-vertical"
                 label="Folder actions"
-                onPress={() => setActionsVisible(true)}
+                onPress={(event) => {
+                  setActionsAnchor({
+                    x: event.nativeEvent.pageX,
+                    y: event.nativeEvent.pageY,
+                  });
+                  setActionsVisible(true);
+                }}
               />
             </>
           ) : undefined
@@ -290,6 +305,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       <FolderActionsDialog
         folder={folder}
         visible={actionsVisible}
+        anchor={actionsAnchor}
         onClose={() => setActionsVisible(false)}
         onRename={() => {
           setActionsVisible(false);
@@ -325,6 +341,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       <BookmarkSortDialog
         visible={sortVisible}
         sortMode={sortMode}
+        anchor={sortAnchor}
         onChange={setSortMode}
         onClose={() => setSortVisible(false)}
       />

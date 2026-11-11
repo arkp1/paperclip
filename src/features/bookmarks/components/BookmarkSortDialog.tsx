@@ -1,10 +1,7 @@
-import { useEffect } from "react";
-import { BackHandler, Pressable, View } from "react-native";
-
 import type { BookmarkSortMode } from "@/features/bookmarks/types";
 import { ActionRow } from "@/shared/ui/ActionRow";
-import { styles } from "@/styles/features/bookmarks/BookmarkSortMenu.styles";
-import { useTheme } from "@/theme";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
+import { OverflowMenu } from "@/shared/ui/OverflowMenu";
 
 const SORT_OPTIONS: {
   icon: "clock-outline" | "sort-alphabetical-ascending";
@@ -19,73 +16,40 @@ const SORT_OPTIONS: {
 type BookmarkSortDialogProps = {
   visible: boolean;
   sortMode: BookmarkSortMode;
+  anchor: MenuAnchor | null;
   onChange: (mode: BookmarkSortMode) => void;
   onClose: () => void;
 };
 
 /**
- * In-screen sort menu. Avoiding a native Modal here removes the white-window
- * flash that occurred when opening sort from the app bar.
+ * Anchored sort menu with the same Reanimated scale/fade motion as the
+ * three-dot overflow menus.
  */
 export function BookmarkSortDialog({
   visible,
   sortMode,
+  anchor,
   onChange,
   onClose,
 }: BookmarkSortDialogProps) {
-  const { theme } = useTheme();
-
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-
-    const subscription = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        onClose();
-        return true;
-      }
-    );
-
-    return () => {
-      subscription.remove();
-    };
-  }, [onClose, visible]);
-
-  if (!visible) {
-    return null;
-  }
-
   return (
-    <View style={styles.overlay} pointerEvents="box-none">
-      <Pressable
-        style={[styles.backdrop, { backgroundColor: theme.colors.scrim }]}
-        onPress={onClose}
-        accessibilityLabel="Close sort menu"
-      />
-      <View
-        style={[
-          styles.menu,
-          {
-            backgroundColor: theme.colors.surfaceContainerLowest,
-            borderColor: theme.colors.outlineVariant,
-          },
-        ]}
-      >
-        {SORT_OPTIONS.map((option) => (
-          <ActionRow
-            key={option.mode}
-            icon={option.icon}
-            label={option.label}
-            selected={sortMode === option.mode}
-            onPress={() => {
-              onChange(option.mode);
-              onClose();
-            }}
-          />
-        ))}
-      </View>
-    </View>
+    <OverflowMenu
+      visible={visible}
+      anchor={anchor ?? { x: 24, y: 72 }}
+      onClose={onClose}
+    >
+      {SORT_OPTIONS.map((option) => (
+        <ActionRow
+          key={option.mode}
+          icon={option.icon}
+          label={option.label}
+          selected={sortMode === option.mode}
+          onPress={() => {
+            onChange(option.mode);
+            onClose();
+          }}
+        />
+      ))}
+    </OverflowMenu>
   );
 }

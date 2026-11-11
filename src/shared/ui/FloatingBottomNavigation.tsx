@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, View } from "react-native";
+import { Animated as RNAnimated, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "expo-router/tabs";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+
+import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
 
 import { AppText } from "@/shared/ui/AppText";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
@@ -36,8 +43,12 @@ function getBarBottomOffset(bottomInset: number): number {
  */
 export function useFloatingNavigationInset(): number {
   const insets = useSafeAreaInsets();
+  const { track } = useReaderAudio();
   return (
-    getBarBottomOffset(insets.bottom) + CAPSULE_HEIGHT + CONTENT_GAP_ABOVE_BAR
+    getBarBottomOffset(insets.bottom) +
+    CAPSULE_HEIGHT +
+    CONTENT_GAP_ABOVE_BAR +
+    (track ? 80 : 0)
   );
 }
 
@@ -51,8 +62,8 @@ export function FloatingBottomNavigation({
   const { colors } = theme;
   const insets = useSafeAreaInsets();
   const [layouts, setLayouts] = useState<TabLayout[]>([]);
-  const pillX = useRef(new Animated.Value(0)).current;
-  const pillWidth = useRef(new Animated.Value(0)).current;
+  const pillX = useSharedValue(0);
+  const pillWidth = useSharedValue(0);
   const hasPositioned = useRef(false);
   const reduceMotion = useReducedMotion();
 
@@ -61,6 +72,11 @@ export function FloatingBottomNavigation({
   const dragStartWidth = useRef(0);
   const draggedX = useRef(0);
 
+  const pillStyle = useAnimatedStyle(() => ({
+    left: pillX.value,
+    width: pillWidth.value,
+  }));
+
   const animatePillTo = useCallback(
     (layout: TabLayout | null) => {
       if (!layout) {
@@ -68,23 +84,13 @@ export function FloatingBottomNavigation({
       }
 
       if (reduceMotion) {
-        pillX.setValue(layout.x);
-        pillWidth.setValue(layout.width);
+        pillX.value = layout.x;
+        pillWidth.value = layout.width;
         return;
       }
 
-      Animated.parallel([
-        Animated.timing(pillX, {
-          toValue: layout.x,
-          duration: 140,
-          useNativeDriver: false,
-        }),
-        Animated.timing(pillWidth, {
-          toValue: layout.width,
-          duration: 140,
-          useNativeDriver: false,
-        }),
-      ]).start();
+      pillX.value = withTiming(layout.x, { duration: 140 });
+      pillWidth.value = withTiming(layout.width, { duration: 140 });
     },
     [pillWidth, pillX, reduceMotion]
   );
@@ -95,8 +101,8 @@ export function FloatingBottomNavigation({
     }
 
     if (!hasPositioned.current) {
-      pillX.setValue(selectedLayout.x);
-      pillWidth.setValue(selectedLayout.width);
+      pillX.value = selectedLayout.x;
+      pillWidth.value = selectedLayout.width;
       hasPositioned.current = true;
       return;
     }
@@ -109,13 +115,9 @@ export function FloatingBottomNavigation({
     .activeOffsetX([-8, 8])
     .failOffsetY([-18, 18])
     .onBegin(() => {
-      pillX.stopAnimation((value) => {
-        dragStartX.current = value;
-        draggedX.current = value;
-      });
-      pillWidth.stopAnimation((value) => {
-        dragStartWidth.current = value;
-      });
+      dragStartX.current = pillX.value;
+      draggedX.current = pillX.value;
+      dragStartWidth.current = pillWidth.value;
     })
     .onUpdate((event) => {
       if (layouts.length === 0) {
@@ -129,7 +131,7 @@ export function FloatingBottomNavigation({
       const next = Math.max(min, Math.min(max, dragStartX.current + event.translationX));
 
       draggedX.current = next;
-      pillX.setValue(next);
+      pillX.value = next;
     })
     .onEnd(() => {
       if (layouts.length === 0) {
@@ -197,9 +199,8 @@ export function FloatingBottomNavigation({
             styles.selectionPill,
             {
               backgroundColor: colors.primaryContainer,
-              left: pillX,
-              width: pillWidth,
             },
+            pillStyle,
           ]}
         />
 
@@ -258,7 +259,7 @@ function TabItem({
 }: TabItemProps) {
   const { theme } = useTheme();
   const { colors } = theme;
-  const selection = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
+  const selection = useRef(new RNAnimated.Value(isFocused ? 1 : 0)).current;
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -267,7 +268,7 @@ function TabItem({
       return;
     }
 
-    Animated.timing(selection, {
+    RNAnimated.timing(selection, {
       toValue: isFocused ? 1 : 0,
       duration: 130,
       useNativeDriver: true,
@@ -289,13 +290,13 @@ function TabItem({
       onLayout={(event) => onLayout(index, event.nativeEvent.layout)}
       style={styles.item}
     >
-      <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+      <RNAnimated.View style={{ transform: [{ scale: iconScale }] }}>
         <MaterialCommunityIcons
           name={isFocused ? icon.active : icon.inactive}
           size={22}
           color={isFocused ? colors.onPrimaryContainer : colors.onSurfaceVariant}
         />
-      </Animated.View>
+      </RNAnimated.View>
 
       <AppText
         variant="labelMedium"

@@ -107,6 +107,14 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: "article_image_cache_version",
+    sql: `
+      ALTER TABLE article_contents
+        ADD COLUMN cache_version INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];
 
 /**

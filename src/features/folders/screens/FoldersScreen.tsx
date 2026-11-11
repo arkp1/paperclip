@@ -20,6 +20,7 @@ import { FloatingAddButton } from "@/shared/ui/FloatingAddButton";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
 import { useCollapsingFab } from "@/shared/hooks/useCollapsingFab";
 import { IconButton } from "@/shared/ui/IconButton";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
@@ -53,6 +54,7 @@ export function FoldersScreen() {
 
   const [createVisible, setCreateVisible] = useState(false);
   const [actionsFolder, setActionsFolder] = useState<Folder | null>(null);
+  const [actionsAnchor, setActionsAnchor] = useState<MenuAnchor | null>(null);
   const [renameFolder, setRenameFolder] = useState<Folder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
 
@@ -113,9 +115,13 @@ export function FoldersScreen() {
     [router]
   );
 
-  const openFolderActions = useCallback((folder: Folder) => {
-    setActionsFolder(folder);
-  }, []);
+  const openFolderActions = useCallback(
+    (folder: Folder, anchor: MenuAnchor) => {
+      setActionsFolder(folder);
+      setActionsAnchor(anchor);
+    },
+    []
+  );
 
   return (
     <Screen>
@@ -264,6 +270,7 @@ export function FoldersScreen() {
       <FolderActionsDialog
         folder={actionsFolder}
         visible={actionsFolder !== null}
+        anchor={actionsAnchor}
         onClose={() => setActionsFolder(null)}
         onRename={() => {
           setRenameFolder(actionsFolder);

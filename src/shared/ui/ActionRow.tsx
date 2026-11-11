@@ -31,7 +31,7 @@ export function ActionRow({
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}
-      scaleTo={0.99}
+      scaleTo={0.97}
       style={[styles.row, disabled ? styles.disabled : null]}
     >
       <MaterialCommunityIcons

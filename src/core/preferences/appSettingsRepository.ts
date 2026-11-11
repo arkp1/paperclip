@@ -3,9 +3,14 @@ import { getDatabase } from "@/core/database/database";
 export type AppSettingKey =
   | "theme_mode"
   | "theme_amoled"
+  | "theme_dynamic"
   | "accent_color"
   | "bookmark_view"
-  | "bookmark_sort";
+  | "bookmark_sort"
+  | "reader_font"
+  | "reader_font_size"
+  | "reader_background"
+  | "reader_paginate";
 
 export async function getSetting(key: AppSettingKey): Promise<string | null> {
   const database = await getDatabase();

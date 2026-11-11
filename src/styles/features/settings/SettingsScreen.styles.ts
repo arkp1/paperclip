@@ -30,6 +30,28 @@ export const styles = StyleSheet.create({
   },
   segmented: {
     width: "100%",
+    flexDirection: "row",
+    gap: 2,
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  segmentPill: {
+    position: "absolute",
+    top: 3,
+    bottom: 3,
+    left: 3,
+    borderRadius: 999,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    paddingHorizontal: spacing[2],
+    zIndex: 1,
   },
   accentRow: {
     flexDirection: "row",

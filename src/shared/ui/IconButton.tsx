@@ -1,3 +1,5 @@
+import type { GestureResponderEvent } from "react-native";
+
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
 import { styles } from "@/styles/shared/ui/IconButton.styles";
@@ -6,7 +8,7 @@ import { useTheme } from "@/theme";
 type IconButtonProps = {
   icon: IconName;
   label: string;
-  onPress: () => void;
+  onPress: (event: GestureResponderEvent) => void;
   color?: string;
   size?: number;
   disabled?: boolean;

@@ -1,27 +1,26 @@
+import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
-import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { refreshMissingPreviews } from "@/features/bookmarks/services/previewService";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { FolderCard } from "@/features/folders/components/FolderCard";
 import type { Folder } from "@/features/folders/types";
 import { useRecentBookmarks } from "@/features/home/hooks/useRecentBookmarks";
 import { useRecentFolders } from "@/features/home/hooks/useRecentFolders";
+import { useCollapsingFab } from "@/shared/hooks/useCollapsingFab";
 import { AppText } from "@/shared/ui/AppText";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { FloatingAddButton } from "@/shared/ui/FloatingAddButton";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
-import { useCollapsingFab } from "@/shared/hooks/useCollapsingFab";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { Screen } from "@/shared/ui/Screen";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
-import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/home/HomeScreen.styles";
 import { useTheme } from "@/theme";
 
@@ -29,7 +28,8 @@ export function HomeScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
-  const { collapsed: fabCollapsed, onScroll: handleScroll } = useCollapsingFab();
+  const { collapsed: fabCollapsed, onScroll: handleScroll } =
+    useCollapsingFab();
   const {
     folders,
     status: foldersStatus,
@@ -60,14 +60,14 @@ export function HomeScreen() {
         params: { folderId: folder.id },
       });
     },
-    [router]
+    [router],
   );
 
   const openBookmark = useCallback(
     (bookmark: Bookmark) => {
       openBookmarkDestination(bookmark, router);
     },
-    [router]
+    [router],
   );
 
   const refreshAll = useCallback(async () => {
@@ -100,7 +100,11 @@ export function HomeScreen() {
         }
       >
         <View style={styles.header}>
-          <AppText variant="titleLarge" style={styles.wordmark} accessibilityRole="header">
+          <AppText
+            variant="titleLarge"
+            style={styles.wordmark}
+            accessibilityRole="header"
+          >
             paperclip
           </AppText>
 
@@ -108,7 +112,7 @@ export function HomeScreen() {
             <AppText variant="eyebrow" color={theme.colors.primary}>
               Your own little corner
             </AppText>
-            <AppText variant="headlineLarge">A place for all the good things.</AppText>
+            <AppText variant="headlineLarge">Save now. Read later.</AppText>
           </View>
         </View>
 
@@ -191,7 +195,8 @@ export function HomeScreen() {
               onPress={() => router.push("/bookmarks/all")}
               scaleTo={0.95}
               style={styles.viewAll}
-            >              <AppText variant="labelLarge" color={theme.colors.primary}>
+            >
+              <AppText variant="labelLarge" color={theme.colors.primary}>
                 View all
               </AppText>
               <MaterialCommunityIcons
@@ -215,7 +220,8 @@ export function HomeScreen() {
           />
         ) : bookmarks.length === 0 ? (
           <AppText variant="bodyMedium" color={theme.colors.onSurfaceVariant}>
-            Links you save will appear here. Use Save link to add your first one.
+            Links you save will appear here. Use Save link to add your first
+            one.
           </AppText>
         ) : (
           <View style={styles.grid}>

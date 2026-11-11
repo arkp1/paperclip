@@ -2,10 +2,16 @@ import { getDatabase } from "@/core/database/database";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { isReadableArticleUrl } from "@/features/reader/utils/isReadableArticleUrl";
 
-export type ArticleBlock = {
-  type: "heading" | "paragraph" | "quote";
-  text: string;
-};
+export type ArticleBlock =
+  | {
+      type: "heading" | "paragraph" | "quote";
+      text: string;
+    }
+  | {
+      type: "image";
+      src: string;
+      alt: string;
+    };
 
 export type CachedArticle = {
   blocks: ArticleBlock[];
@@ -14,6 +20,7 @@ export type CachedArticle = {
 };
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const ARTICLE_CACHE_VERSION = 2;
 const MAX_HTML_CHARACTERS = 1_500_000;
 const MAX_HTML_BYTES = 3_000_000;
 const MAX_REDIRECTS = 5;
@@ -77,14 +84,21 @@ async function getCachedArticle(
     blocks: string;
     wordCount: number;
     fetchedAt: number;
+    cacheVersion: number;
   }>(
-    `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt
+    `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
+            cache_version AS cacheVersion
      FROM article_contents
      WHERE bookmark_id = ?`,
     bookmarkId
   );
 
-  if (!row || (!allowStale && Date.now() - row.fetchedAt > CACHE_MAX_AGE_MS)) {
+  if (
+    !row ||
+    (!allowStale &&
+      (row.cacheVersion < ARTICLE_CACHE_VERSION ||
+        Date.now() - row.fetchedAt > CACHE_MAX_AGE_MS))
+  ) {
     return null;
   }
 
@@ -108,16 +122,18 @@ async function saveArticle(
 ): Promise<void> {
   const database = await getDatabase();
   await database.runAsync(
-    `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at)
-     VALUES (?, ?, ?, ?)
+    `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)
+     VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(bookmark_id) DO UPDATE SET
        blocks = excluded.blocks,
        word_count = excluded.word_count,
-       fetched_at = excluded.fetched_at`,
+       fetched_at = excluded.fetched_at,
+       cache_version = excluded.cache_version`,
     bookmarkId,
     JSON.stringify(article.blocks),
     article.wordCount,
-    article.fetchedAt
+    article.fetchedAt,
+    ARTICLE_CACHE_VERSION
   );
 }
 
@@ -168,13 +184,15 @@ async function fetchArticle(url: string): Promise<CachedArticle> {
       }
 
       const html = await readBoundedHtml(response);
-      const blocks = extractBlocks(html);
+      const blocks = extractBlocks(html, currentUrl);
       if (blocks.length === 0) {
         throw new Error("No readable article text was found.");
       }
 
       const wordCount = blocks.reduce(
-        (count, block) => count + block.text.split(/\s+/).length,
+        (count, block) =>
+          count +
+          (block.type === "image" ? 0 : block.text.split(/\s+/).length),
         0
       );
 
@@ -251,7 +269,7 @@ async function readBoundedHtml(response: Response): Promise<string> {
     .slice(0, MAX_HTML_CHARACTERS);
 }
 
-function extractBlocks(html: string): ArticleBlock[] {
+function extractBlocks(html: string, baseUrl: string): ArticleBlock[] {
   const cleaned = html
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(
@@ -264,7 +282,7 @@ function extractBlocks(html: string): ArticleBlock[] {
     cleaned.match(/<main[^>]*>([\s\S]*?)<\/main>/i)?.[1] ??
     cleaned;
 
-  const blocks: ArticleBlock[] = [];
+  const entries: { index: number; block: ArticleBlock }[] = [];
   const blockPattern =
     /<(h[1-4]|p|li|blockquote)(?=\s|>)[^>]*>([\s\S]*?)<\/\1\s*>/gi;
   let match: RegExpExecArray | null;
@@ -281,13 +299,90 @@ function extractBlocks(html: string): ArticleBlock[] {
       continue;
     }
 
-    blocks.push({
-      type: isHeading ? "heading" : tag === "blockquote" ? "quote" : "paragraph",
-      text,
+    entries.push({
+      index: match.index,
+      block: {
+        type: isHeading ? "heading" : tag === "blockquote" ? "quote" : "paragraph",
+        text,
+      },
     });
   }
 
-  return blocks.slice(0, 400);
+  const imagePattern = /<img(?=\s|>)([^>]*)>/gi;
+  const seenImages = new Set<string>();
+  while ((match = imagePattern.exec(article))) {
+    const attributes = match[1] ?? "";
+    const declaredWidth = Number.parseInt(
+      readAttribute(attributes, "width") ?? "",
+      10
+    );
+    const declaredHeight = Number.parseInt(
+      readAttribute(attributes, "height") ?? "",
+      10
+    );
+    if (
+      (Number.isFinite(declaredWidth) && declaredWidth > 0 && declaredWidth < 120) ||
+      (Number.isFinite(declaredHeight) && declaredHeight > 0 && declaredHeight < 120)
+    ) {
+      continue;
+    }
+
+    const src =
+      readAttribute(attributes, "src") ??
+      readAttribute(attributes, "data-src") ??
+      readAttribute(attributes, "data-original") ??
+      readAttribute(attributes, "srcset")?.split(",")[0]?.trim().split(" ")[0];
+    const safeSrc = src ? safeImageUrl(src, baseUrl) : null;
+    if (!safeSrc || seenImages.has(safeSrc)) {
+      continue;
+    }
+    const alt = normalizeText(
+      decodeEntities(readAttribute(attributes, "alt") ?? "Article image")
+    );
+    if (
+      /\b(whatsapp|facebook|twitter|instagram|linkedin|pinterest|reddit|telegram|share|icon|logo)\b/i.test(
+        `${alt} ${safeSrc}`
+      )
+    ) {
+      continue;
+    }
+    seenImages.add(safeSrc);
+    entries.push({
+      index: match.index,
+      block: {
+        type: "image",
+        src: safeSrc,
+        alt,
+      },
+    });
+  }
+
+  return entries
+    .sort((left, right) => left.index - right.index)
+    .slice(0, 400)
+    .map((entry) => entry.block);
+}
+
+function readAttribute(attributes: string, name: string): string | null {
+  const match = attributes.match(
+    new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "i")
+  );
+  return match?.[2] ?? match?.[3] ?? match?.[4] ?? null;
+}
+
+function safeImageUrl(source: string, baseUrl: string): string | null {
+  try {
+    const resolved = new URL(decodeEntities(source), baseUrl);
+    if (
+      (resolved.protocol !== "http:" && resolved.protocol !== "https:") ||
+      PRIVATE_HOST_PATTERN.test(resolved.hostname.toLowerCase())
+    ) {
+      return null;
+    }
+    return resolved.toString();
+  } catch {
+    return null;
+  }
 }
 
 function stripTags(value: string): string {
@@ -332,14 +427,28 @@ function safeCodePoint(code: number): string {
 }
 
 function isArticleBlock(value: unknown): value is ArticleBlock {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value)
+  ) {
+    return false;
+  }
+
+  if (value.type === "image") {
+    return (
+      "src" in value &&
+      "alt" in value &&
+      typeof value.src === "string" &&
+      typeof value.alt === "string"
+    );
+  }
+
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    "text" in value &&
     (value.type === "heading" ||
       value.type === "paragraph" ||
       value.type === "quote") &&
+    "text" in value &&
     typeof value.text === "string"
   );
 }

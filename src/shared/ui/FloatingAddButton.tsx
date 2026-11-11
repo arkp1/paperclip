@@ -1,5 +1,10 @@
-import { useEffect, useRef } from "react";
-import { Animated } from "react-native";
+import { useEffect } from "react";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 
 import { AppText } from "@/shared/ui/AppText";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
@@ -25,36 +30,31 @@ export function FloatingAddButton({
   const { theme } = useTheme();
   const bottom = useFloatingNavigationInset();
   const reduceMotion = useReducedMotion();
-  const progress = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
+  const progress = useSharedValue(collapsed ? 1 : 0);
 
   useEffect(() => {
     if (reduceMotion) {
-      progress.setValue(collapsed ? 1 : 0);
+      progress.value = collapsed ? 1 : 0;
       return;
     }
 
-    Animated.timing(progress, {
-      toValue: collapsed ? 1 : 0,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
+    progress.value = withTiming(collapsed ? 1 : 0, {
+      duration: 180,
+      easing: Easing.bezier(0.2, 0, 0, 1),
+    });
   }, [collapsed, progress, reduceMotion]);
 
-  const labelWidth = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [64, 0],
-  });
-  const labelMargin = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [8, 0],
-  });
+  const labelStyle = useAnimatedStyle(() => ({
+    width: progress.value === 1 ? 0 : 64 - progress.value * 64,
+    marginLeft: progress.value === 1 ? 0 : 8 - progress.value * 8,
+  }));
 
   return (
     <ScalePressable
       accessibilityRole="button"
       accessibilityLabel="Save a link"
       onPress={onPress}
-      scaleTo={0.94}
+      scaleTo={1}
       inkColor={theme.colors.onPrimary}
       style={[
         styles.fab,
@@ -70,9 +70,7 @@ export function FloatingAddButton({
         size={26}
         color={theme.colors.onPrimary}
       />
-      <Animated.View
-        style={[styles.label, { width: labelWidth, marginLeft: labelMargin }]}
-      >
+      <Animated.View style={[styles.label, labelStyle]}>
         <AppText variant="labelLarge" color={theme.colors.onPrimary} numberOfLines={1}>
           Save link
         </AppText>

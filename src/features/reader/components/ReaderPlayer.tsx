@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Speech from "expo-speech";
 
 import { IconButton } from "@/shared/ui/IconButton";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
+import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
 import { styles } from "@/styles/features/reader/ReaderPlayer.styles";
 import { useTheme } from "@/theme";
@@ -12,6 +20,8 @@ import { useTheme } from "@/theme";
 type ReaderPlayerProps = {
   title: string;
   paragraphs: string[];
+  bottomOffset?: number;
+  onClose?: () => void;
 };
 
 const SPEEDS = [0.75, 1, 1.25, 1.5];
@@ -20,18 +30,25 @@ const SPEEDS = [0.75, 1, 1.25, 1.5];
  * Mini listening player with a spring-expanded sheet, progress, and speed
  * controls. Speech is chunked to respect the platform input limit.
  */
-export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
+export function ReaderPlayer({ title, paragraphs, bottomOffset = 12, onClose }: ReaderPlayerProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [speaking, setSpeaking] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [rendered, setRendered] = useState(false);
   const [rate, setRate] = useState(1);
   const [progress, setProgress] = useState(0);
+  const [speechError, setSpeechError] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const miniVisibility = useRef(new Animated.Value(0)).current;
   const rateRef = useRef(1);
   const currentChunk = useRef(0);
+  const resumeChar = useRef(0);
   const cancelled = useRef(false);
   const playbackGeneration = useRef(0);
   const expansion = useRef(new Animated.Value(0)).current;
+  const renderedRef = useRef(false);
 
   const { chunks, offsets, totalChars } = useMemo(
     () => buildSpeechChunks(paragraphs),
@@ -45,7 +62,12 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
     void Speech.stop();
   };
 
-  const speakFrom = (index: number, speed: number, generation: number) => {
+  const speakFrom = (
+    index: number,
+    speed: number,
+    generation: number,
+    startChar = 0
+  ) => {
     if (
       cancelled.current ||
       generation !== playbackGeneration.current ||
@@ -63,61 +85,66 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
     }
 
     currentChunk.current = index;
-    const base = offsets[index] ?? 0;
+    resumeChar.current = startChar;
+    const text = chunks[index].slice(startChar);
+    const base = (offsets[index] ?? 0) + startChar;
     setProgress(Math.min(1, base / totalChars));
-    Speech.speak(chunks[index], {
-      rate: speed,
-      onBoundary: (event: { charIndex: number; charLength: number }) => {
-        if (generation !== playbackGeneration.current) {
-          return;
-        }
-        setProgress(
-          Math.min(1, (base + (event.charIndex ?? 0)) / totalChars)
-        );
-      },
-      onDone: () => {
-        if (generation === playbackGeneration.current) {
-          speakFrom(index + 1, rateRef.current, generation);
-        }
-      },
-      onStopped: () => {
-        if (generation === playbackGeneration.current) {
-          setSpeaking(false);
-        }
-      },
-      onError: () => {
-        if (generation === playbackGeneration.current) {
-          setSpeaking(false);
-        }
-      },
-    });
+    try {
+      Speech.speak(text, {
+        rate: speed,
+        onBoundary: (event: { charIndex: number; charLength: number }) => {
+          if (generation !== playbackGeneration.current) {
+            return;
+          }
+          resumeChar.current = startChar + (event.charIndex ?? 0);
+          setProgress(
+            Math.min(1, (base + (event.charIndex ?? 0)) / totalChars)
+          );
+        },
+        onDone: () => {
+          if (generation === playbackGeneration.current) {
+            resumeChar.current = 0;
+            speakFrom(index + 1, rateRef.current, generation, 0);
+          }
+        },
+        onStopped: () => {
+          if (generation === playbackGeneration.current) {
+            setSpeaking(false);
+          }
+        },
+        onError: () => {
+          if (generation === playbackGeneration.current) {
+            setSpeaking(false);
+            setSpeechError(true);
+          }
+        },
+      });
+    } catch {
+      setSpeaking(false);
+      setSpeechError(true);
+    }
   };
 
-  const startPlayback = (index: number, speed: number) => {
+  const startPlayback = (
+    index: number,
+    speed: number,
+    startChar = 0
+  ) => {
+    setSpeechError(false);
     playbackGeneration.current += 1;
     const generation = playbackGeneration.current;
     cancelled.current = false;
     setSpeaking(true);
-    speakFrom(index, speed, generation);
+    speakFrom(index, speed, generation, startChar);
   };
 
-  const togglePlayback = () => {
-    if (speaking) {
-      stop();
-      return;
-    }
-
-    if (progress >= 0.999) {
-      setProgress(0);
-      currentChunk.current = 0;
-    }
-
-    startPlayback(currentChunk.current, rateRef.current);
-  };
-
-  const changeRate = (next: number) => {
-    rateRef.current = next;
-    setRate(next);
+  const jumpTo = (index: number, startChar = 0) => {
+    const next = Math.max(0, Math.min(chunks.length - 1, index));
+    currentChunk.current = next;
+    resumeChar.current = startChar;
+    setProgress(
+      Math.min(1, ((offsets[next] ?? 0) + startChar) / totalChars)
+    );
 
     if (!speaking) {
       return;
@@ -132,8 +159,55 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
       }
       cancelled.current = false;
       setSpeaking(true);
-      speakFrom(currentChunk.current, next, generation);
+      speakFrom(next, rateRef.current, generation, startChar);
     });
+  };
+
+  const togglePlayback = () => {
+    if (speaking) {
+      stop();
+      return;
+    }
+
+    if (progress >= 0.999) {
+      setProgress(0);
+      currentChunk.current = 0;
+      resumeChar.current = 0;
+    }
+
+    startPlayback(
+      currentChunk.current,
+      rateRef.current,
+      resumeChar.current
+    );
+  };
+
+  const changeRate = (next: number) => {
+    rateRef.current = next;
+    setRate(next);
+
+    if (speaking) {
+      jumpTo(currentChunk.current, resumeChar.current);
+    }
+  };
+
+  const seekBy = (direction: -1 | 1) => {
+    jumpTo(currentChunk.current + direction, 0);
+  };
+
+  const seekToFraction = (fraction: number) => {
+    const targetChar = Math.max(
+      0,
+      Math.min(totalChars - 1, Math.round(fraction * totalChars))
+    );
+    let index = 0;
+    while (
+      index + 1 < offsets.length &&
+      offsets[index + 1] <= targetChar
+    ) {
+      index += 1;
+    }
+    jumpTo(index, Math.max(0, targetChar - (offsets[index] ?? 0)));
   };
 
   useEffect(() => {
@@ -145,28 +219,96 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
   }, []);
 
   useEffect(() => {
-    if (!expanded) {
+    if (reduceMotion) {
+      miniVisibility.setValue(1);
+      return;
+    }
+    Animated.spring(miniVisibility, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 24,
+      bounciness: 2,
+    }).start();
+  }, [miniVisibility, reduceMotion]);
+
+  const closeMini = () => {
+    if (closing) {
+      return;
+    }
+    setClosing(true);
+    stop();
+    if (reduceMotion || !onClose) {
+      onClose?.();
+      return;
+    }
+    Animated.timing(miniVisibility, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        onClose?.();
+      }
+    });
+  };
+
+  useEffect(() => {
+    renderedRef.current = rendered;
+  }, [rendered]);
+
+  useEffect(() => {
+    if (expanded) {
+      setRendered(true);
+      expansion.setValue(0);
+      Animated.spring(expansion, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 22,
+        bounciness: 2,
+      }).start();
       return;
     }
 
-    expansion.setValue(0);
-    Animated.spring(expansion, {
-      toValue: 1,
+    if (!renderedRef.current) {
+      return;
+    }
+
+    Animated.timing(expansion, {
+      toValue: 0,
+      duration: 180,
       useNativeDriver: true,
-      speed: 22,
-      bounciness: 2,
-    }).start();
+    }).start(({ finished }) => {
+      if (finished) {
+        setRendered(false);
+      }
+    });
   }, [expanded, expansion]);
 
   return (
     <>
-      <View
+      <Animated.View
+        pointerEvents={closing ? "none" : "auto"}
         style={[
           styles.mini,
           {
-            bottom: insets.bottom + 12,
+            bottom: insets.bottom + bottomOffset,
             backgroundColor: theme.colors.surfaceContainerHigh,
             borderColor: theme.colors.outlineVariant,
+            opacity: miniVisibility,
+            transform: [
+              {
+                translateY: miniVisibility.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [36, 0],
+                }),
+              },
+              {
+                scale: miniVisibility.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.96, 1],
+                }),
+              },
+            ],
           },
         ]}
       >
@@ -179,7 +321,7 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
           />
         </View>
 
-        <Pressable
+        <ScalePressable
           style={styles.miniInfo}
           onPress={() => setExpanded(true)}
           accessibilityRole="button"
@@ -193,10 +335,12 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
               {title}
             </Text>
             <Text style={[styles.miniMeta, { color: theme.colors.onSurfaceVariant }]}>
-              {speaking ? "Listening" : "Listen"} · {rate}×
+              {speechError
+                ? "Speech unavailable"
+                : `${speaking ? "Listening" : "Listen"} · ${rate}×`}
             </Text>
           </View>
-        </Pressable>
+        </ScalePressable>
 
         <IconButton
           icon={speaking ? "pause" : "play"}
@@ -204,19 +348,36 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
           onPress={togglePlayback}
           color={theme.colors.primary}
         />
-      </View>
-
-      {expanded ? (
-        <View style={styles.overlay} pointerEvents="box-none">
-          <Pressable
-            style={[styles.backdrop, { backgroundColor: theme.colors.scrim }]}
-            onPress={() => setExpanded(false)}
-            accessibilityLabel="Close player"
+        {onClose ? (
+          <IconButton
+            icon="close"
+            label="Close player"
+            size={20}
+            onPress={closeMini}
+            color={theme.colors.onSurfaceVariant}
           />
+        ) : null}
+      </Animated.View>
+
+      {rendered ? (
+        <View style={styles.overlay} pointerEvents="box-none">
+          <Animated.View
+            style={[
+              styles.backdrop,
+              { backgroundColor: theme.colors.scrim, opacity: expansion },
+            ]}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={() => setExpanded(false)}
+              accessibilityLabel="Close player"
+            />
+          </Animated.View>
           <Animated.View
             style={[
               styles.sheet,
               {
+                opacity: expansion,
                 paddingBottom: insets.bottom + 24,
                 backgroundColor: theme.colors.surfaceContainerLowest,
                 borderColor: theme.colors.outlineVariant,
@@ -252,20 +413,27 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
               <IconButton
                 icon="chevron-down"
                 label="Collapse player"
+                size={30}
                 onPress={() => setExpanded(false)}
               />
             </View>
 
-            <View style={styles.bigProgressTrack}>
-              <View
-                style={[
-                  styles.bigProgressFill,
-                  { width: `${progress * 100}%`, backgroundColor: theme.colors.primary },
-                ]}
-              />
-            </View>
+            <SeekBar
+              progress={progress}
+              onSeek={seekToFraction}
+              activeColor={theme.colors.primary}
+              trackColor={theme.colors.outlineVariant}
+              thumbColor={theme.colors.onPrimary}
+            />
 
             <View style={styles.controls}>
+              <IconButton
+                icon="rewind-15"
+                label="Previous section"
+                size={28}
+                color={theme.colors.onSurfaceVariant}
+                onPress={() => seekBy(-1)}
+              />
               <ScalePressable
                 accessibilityRole="button"
                 accessibilityLabel={speaking ? "Pause" : "Play"}
@@ -282,6 +450,13 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
                   color={theme.colors.onPrimary}
                 />
               </ScalePressable>
+              <IconButton
+                icon="fast-forward-15"
+                label="Next section"
+                size={28}
+                color={theme.colors.onSurfaceVariant}
+                onPress={() => seekBy(1)}
+              />
             </View>
 
             <View style={styles.speeds}>
@@ -324,6 +499,112 @@ export function ReaderPlayer({ title, paragraphs }: ReaderPlayerProps) {
         </View>
       ) : null}
     </>
+  );
+}
+
+/**
+ * Draggable listening progress control. The thumb follows the finger and seeks
+ * when released, using the same character offsets as speech playback.
+ */
+function SeekBar({
+  progress,
+  onSeek,
+  activeColor,
+  trackColor,
+  thumbColor,
+}: {
+  progress: number;
+  onSeek: (fraction: number) => void;
+  activeColor: string;
+  trackColor: string;
+  thumbColor: string;
+}) {
+  const widthRef = useRef(0);
+  const leftRef = useRef(0);
+  const seekRef = useRef<ComponentRef<typeof View>>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const dragRef = useRef<number | null>(null);
+  const onSeekRef = useRef(onSeek);
+  onSeekRef.current = onSeek;
+
+  const updateFromEvent = (pageX: number, localX: number) => {
+    if (widthRef.current <= 0) {
+      return;
+    }
+    const x = leftRef.current > 0 ? pageX - leftRef.current : localX;
+    const next = Math.max(0, Math.min(1, x / widthRef.current));
+    dragRef.current = next;
+    setDragging(next);
+  };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          updateFromEvent(
+            event.nativeEvent.pageX,
+            event.nativeEvent.locationX
+          );
+        },
+        onPanResponderMove: (event) => {
+          updateFromEvent(
+            event.nativeEvent.pageX,
+            event.nativeEvent.locationX
+          );
+        },
+        onPanResponderRelease: () => {
+          if (dragRef.current !== null) {
+            onSeekRef.current(dragRef.current);
+          }
+          dragRef.current = null;
+          setDragging(null);
+        },
+        onPanResponderTerminate: () => {
+          dragRef.current = null;
+          setDragging(null);
+        },
+      }),
+    []
+  );
+
+  const value = dragging ?? progress;
+
+  return (
+    <View
+      ref={seekRef}
+      style={styles.seekArea}
+      onLayout={(event) => {
+        widthRef.current = event.nativeEvent.layout.width;
+        seekRef.current?.measureInWindow((x) => {
+          leftRef.current = x;
+        });
+      }}
+      accessibilityRole="adjustable"
+      accessibilityLabel="Listening progress"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(value * 100) }}
+      {...panResponder.panHandlers}
+    >
+      <View style={[styles.seekTrack, { backgroundColor: trackColor }]}>
+        <View
+          style={[
+            styles.seekFill,
+            { width: `${value * 100}%`, backgroundColor: activeColor },
+          ]}
+        />
+        <View
+          style={[
+            styles.seekThumb,
+            {
+              left: `${value * 100}%`,
+              backgroundColor: thumbColor,
+              borderColor: activeColor,
+            },
+          ]}
+        />
+      </View>
+    </View>
   );
 }
 

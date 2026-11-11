@@ -17,6 +17,7 @@ export type ThemeMode = "system" | "light" | "dark";
 
 const THEME_MODE_SETTING_KEY = "theme_mode";
 const AMOLED_SETTING_KEY = "theme_amoled";
+const DYNAMIC_SETTING_KEY = "theme_dynamic";
 const ACCENT_SETTING_KEY = "accent_color";
 
 type ThemeContextValue = {
@@ -25,9 +26,11 @@ type ThemeContextValue = {
   mode: ThemeMode;
   accent: AccentKey;
   amoled: boolean;
+  dynamic: boolean;
   setMode: (mode: ThemeMode) => void;
   setAccent: (accent: AccentKey) => void;
   setAmoled: (enabled: boolean) => void;
+  setDynamic: (enabled: boolean) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -48,6 +51,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>("system");
   const [accent, setAccentState] = useState<AccentKey>("violet");
   const [amoled, setAmoledState] = useState(false);
+  const [dynamic, setDynamicState] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,9 +59,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     void Promise.all([
       getSetting(THEME_MODE_SETTING_KEY),
       getSetting(AMOLED_SETTING_KEY),
+      getSetting(DYNAMIC_SETTING_KEY),
       getSetting(ACCENT_SETTING_KEY),
     ])
-      .then(([storedMode, storedAmoled, storedAccent]) => {
+      .then(([storedMode, storedAmoled, storedDynamic, storedAccent]) => {
         if (cancelled) {
           return;
         }
@@ -66,6 +71,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         }
         if (storedAmoled === "true") {
           setAmoledState(true);
+        }
+        if (storedDynamic === "true") {
+          setDynamicState(true);
         }
         if (isAccentKey(storedAccent)) {
           setAccentState(storedAccent);
@@ -102,6 +110,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setDynamic = useCallback((enabled: boolean) => {
+    setDynamicState(enabled);
+    void setSetting(DYNAMIC_SETTING_KEY, enabled ? "true" : "false").catch(() => {
+      console.warn("Could not persist the dynamic colour preference.");
+    });
+  }, []);
+
   const value = useMemo<ThemeContextValue>(() => {
     const scheme = resolveScheme(
       mode,
@@ -113,11 +128,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       mode,
       accent,
       amoled,
+      dynamic,
       setMode,
       setAccent,
       setAmoled,
+      setDynamic,
     };
-  }, [accent, amoled, mode, setAccent, setAmoled, setMode, systemScheme]);
+  }, [
+    accent,
+    amoled,
+    dynamic,
+    mode,
+    setAccent,
+    setAmoled,
+    setDynamic,
+    setMode,
+    systemScheme,
+  ]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

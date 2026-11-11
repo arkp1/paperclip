@@ -13,12 +13,19 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ShareIntentRouter } from "@/features/save-link/components/ShareIntentRouter";
+import { ReaderAudioHost } from "@/features/reader/audio/ReaderAudioHost";
+import { ReaderAudioProvider } from "@/features/reader/audio/ReaderAudioProvider";
 import { DatabaseGate } from "@/shared/ui/DatabaseGate";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { ThemeProvider, useTheme } from "@/theme";
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({ ...MaterialCommunityIcons.font });
+  const [fontsLoaded, fontError] = useFonts({
+    ...MaterialCommunityIcons.font,
+    "GoogleSansFlex-Regular": require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
+    GoogleSansFlex: require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
+    "Google Sans Flex": require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
+  });
 
   if (!fontsLoaded && !fontError) {
     return null;
@@ -30,8 +37,12 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <ThemeProvider>
             <DatabaseGate>
-              <ShareIntentRouter />
-              <ThemedNavigator />
+              <ReaderAudioProvider>
+                <View style={{ flex: 1 }}>
+                  <ShareIntentRouter />
+                  <ThemedNavigator />
+                </View>
+              </ReaderAudioProvider>
             </DatabaseGate>
           </ThemeProvider>
         </SafeAreaProvider>
@@ -69,7 +80,9 @@ function ThemedNavigator() {
             contentStyle: { backgroundColor: theme.colors.background },
           }}
         />
+        <ReaderAudioHost />
       </View>
     </NavigationThemeProvider>
   );
 }
+

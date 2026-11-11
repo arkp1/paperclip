@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
-import { Animated, View } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
 import type { BookmarkViewMode } from "@/features/bookmarks/types";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
@@ -31,7 +36,7 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
     0,
     VIEW_OPTIONS.findIndex((option) => option.mode === viewMode)
   );
-  const indicatorX = useRef(new Animated.Value(selectedIndex * OPTION_STEP)).current;
+  const indicatorX = useSharedValue(selectedIndex * OPTION_STEP);
   const reduceMotion = useReducedMotion();
   const dragStartX = useRef(selectedIndex * OPTION_STEP);
   const draggedX = useRef(selectedIndex * OPTION_STEP);
@@ -41,16 +46,15 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
       const target = index * OPTION_STEP;
 
       if (reduceMotion) {
-        indicatorX.setValue(target);
+        indicatorX.value = target;
         return;
       }
 
-      Animated.spring(indicatorX, {
-        toValue: target,
-        useNativeDriver: true,
-        speed: 26,
-        bounciness: 4,
-      }).start();
+      indicatorX.value = withSpring(target, {
+        damping: 20,
+        stiffness: 320,
+        mass: 0.5,
+      });
     },
     [indicatorX, reduceMotion]
   );
@@ -59,15 +63,17 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
     animateIndicator(selectedIndex);
   }, [animateIndicator, selectedIndex]);
 
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorX.value }],
+  }));
+
   const dragSelection = Gesture.Pan()
     .runOnJS(true)
     .activeOffsetX([-8, 8])
     .failOffsetY([-16, 16])
     .onBegin(() => {
-      indicatorX.stopAnimation((value) => {
-        dragStartX.current = value;
-        draggedX.current = value;
-      });
+      dragStartX.current = indicatorX.value;
+      draggedX.current = indicatorX.value;
     })
     .onUpdate((event) => {
       const next = Math.max(
@@ -75,7 +81,7 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
         Math.min(MAX_INDEX * OPTION_STEP, dragStartX.current + event.translationX)
       );
       draggedX.current = next;
-      indicatorX.setValue(next);
+      indicatorX.value = next;
     })
     .onEnd(() => {
       const nextIndex = Math.max(
@@ -106,10 +112,8 @@ export function BookmarkViewSelector({ viewMode, onChange }: BookmarkViewSelecto
             pointerEvents="none"
             style={[
               styles.indicator,
-              {
-                backgroundColor: theme.colors.primaryContainer,
-                transform: [{ translateX: indicatorX }],
-              },
+              { backgroundColor: theme.colors.primaryContainer },
+              indicatorStyle,
             ]}
           />
 

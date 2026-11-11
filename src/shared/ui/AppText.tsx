@@ -1,4 +1,4 @@
-import { Text, type TextProps } from "react-native";
+import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
 
 import { typography, useTheme, type TypographyVariant } from "@/theme";
 
@@ -14,11 +14,23 @@ export function AppText({
   ...rest
 }: AppTextProps) {
   const { theme } = useTheme();
+  const resolved = StyleSheet.flatten([
+    typography[variant],
+    style,
+  ]) as TextStyle | undefined;
+  const fontFamily = resolved?.fontFamily ?? "GoogleSansFlex-Regular";
 
   return (
     <Text
       {...rest}
-      style={[typography[variant], { color: color ?? theme.colors.onSurface }, style]}
+      style={[
+        typography[variant],
+        { fontFamily },
+        { color: color ?? theme.colors.onSurface },
+        style,
+      ]}
     />
   );
 }
+
+

@@ -23,6 +23,7 @@ import { AnimatedLayoutChange } from "@/shared/ui/AnimatedLayoutChange";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { IconButton } from "@/shared/ui/IconButton";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
@@ -47,6 +48,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
     null
   );
   const [sortVisible, setSortVisible] = useState(false);
+  const [sortAnchor, setSortAnchor] = useState<MenuAnchor | null>(null);
   const { viewMode, setViewMode } = useBookmarkViewMode();
   const [viewDirection, setViewDirection] = useState<1 | -1>(1);
   const [refreshing, setRefreshing] = useState(false);
@@ -107,7 +109,13 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
           <IconButton
             icon="sort-variant"
             label="Sort bookmarks"
-            onPress={() => setSortVisible(true)}
+            onPress={(event) => {
+              setSortAnchor({
+                x: event.nativeEvent.pageX,
+                y: event.nativeEvent.pageY,
+              });
+              setSortVisible(true);
+            }}
           />
         }
       />
@@ -187,6 +195,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
       <BookmarkSortDialog
         visible={sortVisible}
         sortMode={sortMode}
+        anchor={sortAnchor}
         onChange={setSortMode}
         onClose={() => setSortVisible(false)}
       />

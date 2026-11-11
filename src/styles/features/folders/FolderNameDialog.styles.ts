@@ -20,9 +20,5 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  check: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
 });
+

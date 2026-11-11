@@ -11,6 +11,7 @@ import { DeleteFolderDialog } from "@/features/folders/components/DeleteFolderDi
 import { FolderActionsDialog } from "@/features/folders/components/FolderActionsDialog";
 import { FolderCard } from "@/features/folders/components/FolderCard";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
+import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import {
   createFolder,
   deleteFolder,
@@ -40,6 +41,7 @@ export function PrivateFoldersScreen() {
   const started = useRef(false);
   const [createVisible, setCreateVisible] = useState(false);
   const [actionsFolder, setActionsFolder] = useState<Folder | null>(null);
+  const [actionsAnchor, setActionsAnchor] = useState<MenuAnchor | null>(null);
   const [renameFolder, setRenameFolder] = useState<Folder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
 
@@ -180,7 +182,10 @@ export function PrivateFoldersScreen() {
           <FolderCard
             folder={item}
             onPress={openFolder}
-            onMore={setActionsFolder}
+            onMore={(folder, anchor) => {
+              setActionsFolder(folder);
+              setActionsAnchor(anchor);
+            }}
           />
         )}
       />
@@ -208,6 +213,7 @@ export function PrivateFoldersScreen() {
       <FolderActionsDialog
         folder={actionsFolder}
         visible={actionsFolder !== null}
+        anchor={actionsAnchor}
         onClose={() => setActionsFolder(null)}
         onRename={() => {
           setRenameFolder(actionsFolder);

@@ -12,22 +12,24 @@ type TopAppBarProps = {
   icon?: IconName;
   onBack?: () => void;
   actions?: ReactNode;
+  foregroundColor?: string;
 };
 
-export function TopAppBar({ title, icon, onBack, actions }: TopAppBarProps) {
+export function TopAppBar({ title, icon, onBack, actions, foregroundColor }: TopAppBarProps) {
   const { theme } = useTheme();
+  const foreground = foregroundColor ?? theme.colors.onSurface;
 
   return (
     <View style={styles.container}>
       {onBack ? (
-        <IconButton icon="arrow-left" label="Go back" onPress={onBack} color={theme.colors.onSurface} />
+        <IconButton icon="arrow-left" label="Go back" onPress={onBack} color={foreground} />
       ) : null}
 
       {icon ? (
         <MaterialCommunityIcons
           name={icon}
           size={22}
-          color={theme.colors.onSurfaceVariant}
+          color={foregroundColor ?? theme.colors.onSurfaceVariant}
           style={styles.titleIcon}
         />
       ) : null}
@@ -36,6 +38,7 @@ export function TopAppBar({ title, icon, onBack, actions }: TopAppBarProps) {
         variant="headlineSmall"
         numberOfLines={1}
         style={styles.title}
+        color={foreground}
         accessibilityRole="header"
       >
         {title}

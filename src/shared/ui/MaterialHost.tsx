@@ -16,12 +16,12 @@ type MaterialHostProps = {
  * theme instead of the device wallpaper.
  */
 export function MaterialHost({ children, style, matchContents }: MaterialHostProps) {
-  const { theme } = useTheme();
+  const { theme, dynamic } = useTheme();
 
   return (
     <Host
       colorScheme={theme.scheme}
-      seedColor={theme.colors.primary}
+      {...(dynamic ? {} : { seedColor: theme.colors.primary })}
       style={style}
       matchContents={matchContents}
     >
