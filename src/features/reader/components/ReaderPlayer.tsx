@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import {
   Animated,
+  Easing,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -42,6 +43,9 @@ export function ReaderPlayer({ title, paragraphs, bottomOffset = 12, onClose }: 
   const [speechError, setSpeechError] = useState(false);
   const [closing, setClosing] = useState(false);
   const miniVisibility = useRef(new Animated.Value(0)).current;
+  const miniLift = useRef(
+    new Animated.Value(Math.max(0, bottomOffset - 12))
+  ).current;
   const rateRef = useRef(1);
   const currentChunk = useRef(0);
   const resumeChar = useRef(0);
@@ -221,6 +225,7 @@ export function ReaderPlayer({ title, paragraphs, bottomOffset = 12, onClose }: 
   useEffect(() => {
     if (reduceMotion) {
       miniVisibility.setValue(1);
+      miniLift.setValue(Math.max(0, bottomOffset - 12));
       return;
     }
     Animated.spring(miniVisibility, {
@@ -230,6 +235,20 @@ export function ReaderPlayer({ title, paragraphs, bottomOffset = 12, onClose }: 
       bounciness: 2,
     }).start();
   }, [miniVisibility, reduceMotion]);
+
+  useEffect(() => {
+    const target = Math.max(0, bottomOffset - 12);
+    if (reduceMotion) {
+      miniLift.setValue(target);
+      return;
+    }
+    Animated.timing(miniLift, {
+      toValue: target,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [bottomOffset, miniLift, reduceMotion]);
 
   const closeMini = () => {
     if (closing) {
@@ -291,16 +310,19 @@ export function ReaderPlayer({ title, paragraphs, bottomOffset = 12, onClose }: 
         style={[
           styles.mini,
           {
-            bottom: insets.bottom + bottomOffset,
+            bottom: insets.bottom + 12,
             backgroundColor: theme.colors.surfaceContainerHigh,
             borderColor: theme.colors.outlineVariant,
             opacity: miniVisibility,
             transform: [
               {
-                translateY: miniVisibility.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [36, 0],
-                }),
+                translateY: Animated.subtract(
+                  miniVisibility.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [36, 0],
+                  }),
+                  miniLift
+                ),
               },
               {
                 scale: miniVisibility.interpolate({

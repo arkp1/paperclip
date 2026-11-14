@@ -12,6 +12,7 @@ export {
   pickFolderColorKey,
   type FolderColorKey,
 } from "./colors";
+export { folderTone, type FolderTone } from "./folderTones";
 export {
   accentOptions,
   accentSwatch,

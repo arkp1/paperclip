@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
-import { getPublicBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
+import { getBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
 
 type BookmarkDetailsState = {
@@ -19,9 +19,9 @@ export function useBookmarkDetails(bookmarkId: string) {
 
   const load = useCallback(async () => {
     try {
-      const bookmark = await getPublicBookmarkById(bookmarkId);
+      const bookmark = await getBookmarkById(bookmarkId);
       setState({
-        bookmark,
+        bookmark: bookmark ? { ...bookmark, folderName: null } : null,
         status: bookmark ? "ready" : "not_found",
         errorMessage: null,
       });

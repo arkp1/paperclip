@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
 import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
 import { useSearchBookmarks } from "@/features/bookmarks/hooks/useSearchBookmarks";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
@@ -24,6 +25,7 @@ export function SearchScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const audioInset = useReaderAudioInset();
   const [query, setQuery] = useState("");
   const { results, status, errorMessage, reload } = useSearchBookmarks(query);
   const { allCount, status: countsStatus } = useCollectionCounts();
@@ -74,7 +76,7 @@ export function SearchScreen() {
         removeClippedSubviews
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + spacing[6] },
+          { paddingBottom: insets.bottom + spacing[6] + audioInset },
         ]}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "expo-router";
 import { Switch } from "@expo/ui/jetpack-compose";
 import { semantics } from "@expo/ui/jetpack-compose/modifiers";
 import Constants from "expo-constants";
-import { ScrollView, View, Platform } from "react-native";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { Platform, ScrollView, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -12,10 +12,10 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { AppText } from "@/shared/ui/AppText";
-import { MaterialHost } from "@/shared/ui/MaterialHost";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
-import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
+import { MaterialHost } from "@/shared/ui/MaterialHost";
+import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { styles } from "@/styles/features/settings/SettingsScreen.styles";
@@ -39,6 +39,8 @@ export function SettingsScreen() {
     setAmoled,
     dynamic,
     setDynamic,
+    folderTonal,
+    setFolderTonal,
   } = useTheme();
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
@@ -46,7 +48,7 @@ export function SettingsScreen() {
   const [segmentWidth, setSegmentWidth] = useState(0);
   const selectedIndex = Math.max(
     0,
-    THEME_OPTIONS.findIndex((option) => option.mode === mode)
+    THEME_OPTIONS.findIndex((option) => option.mode === mode),
   );
   const selection = useSharedValue(selectedIndex);
 
@@ -71,16 +73,27 @@ export function SettingsScreen() {
         </AppText>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
+      >
         <View style={styles.section}>
           <AppText variant="eyebrow" color={theme.colors.primary}>
             Appearance
           </AppText>
 
-          <View style={[styles.group, styles.themeGroup, { borderColor: theme.colors.outlineVariant }]}>
+          <View
+            style={[
+              styles.group,
+              styles.themeGroup,
+              { borderColor: theme.colors.outlineVariant },
+            ]}
+          >
             <View style={styles.themeCopy}>
               <AppText variant="bodyLarge">Theme</AppText>
-              <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+              <AppText
+                variant="bodySmall"
+                color={theme.colors.onSurfaceVariant}
+              >
                 Choose how Paperclip looks.
               </AppText>
             </View>
@@ -141,11 +154,18 @@ export function SettingsScreen() {
           </View>
 
           <View
-            style={[styles.group, styles.themeGroup, { borderColor: theme.colors.outlineVariant }]}
+            style={[
+              styles.group,
+              styles.themeGroup,
+              { borderColor: theme.colors.outlineVariant },
+            ]}
           >
             <View style={styles.themeCopy}>
               <AppText variant="bodyLarge">Accent</AppText>
-              <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+              <AppText
+                variant="bodySmall"
+                color={theme.colors.onSurfaceVariant}
+              >
                 Choose the accent used across Paperclip.
               </AppText>
             </View>
@@ -191,7 +211,10 @@ export function SettingsScreen() {
             <View style={styles.row}>
               <View style={styles.rowCopy}>
                 <AppText variant="bodyLarge">AMOLED black</AppText>
-                <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+                <AppText
+                  variant="bodySmall"
+                  color={theme.colors.onSurfaceVariant}
+                >
                   Use a pure black background whenever the dark theme is active.
                 </AppText>
               </View>
@@ -200,7 +223,9 @@ export function SettingsScreen() {
                   value={amoled}
                   onCheckedChange={setAmoled}
                   modifiers={[
-                    semantics({ contentDescription: "AMOLED black background" }),
+                    semantics({
+                      contentDescription: "AMOLED black background",
+                    }),
                   ]}
                 />
               </MaterialHost>
@@ -218,7 +243,10 @@ export function SettingsScreen() {
               >
                 <View style={styles.rowCopy}>
                   <AppText variant="bodyLarge">Dynamic colour</AppText>
-                  <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
+                  <AppText
+                    variant="bodySmall"
+                    color={theme.colors.onSurfaceVariant}
+                  >
                     Native Material controls follow your Android wallpaper. App
                     surfaces keep the selected accent.
                   </AppText>
@@ -235,6 +263,32 @@ export function SettingsScreen() {
               </View>
             ) : null}
           </View>
+
+          <View
+            style={[styles.group, { borderColor: theme.colors.outlineVariant }]}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowCopy}>
+                <AppText variant="bodyLarge">Folder Accent</AppText>
+                <AppText
+                  variant="bodySmall"
+                  color={theme.colors.onSurfaceVariant}
+                >
+                  Tint each folder card from its assigned colour. Off keeps the
+                  neutral card surface.
+                </AppText>
+              </View>
+              <MaterialHost matchContents>
+                <Switch
+                  value={folderTonal}
+                  onCheckedChange={setFolderTonal}
+                  modifiers={[
+                    semantics({ contentDescription: "Tonal folder cards" }),
+                  ]}
+                />
+              </MaterialHost>
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -242,7 +296,9 @@ export function SettingsScreen() {
             Privacy &amp; security
           </AppText>
 
-          <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
+          <View
+            style={[styles.group, { borderColor: theme.colors.outlineVariant }]}
+          >
             <InfoRow
               icon="shield-lock-outline"
               title="Locked folders"
@@ -261,7 +317,9 @@ export function SettingsScreen() {
             Your data
           </AppText>
 
-          <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
+          <View
+            style={[styles.group, { borderColor: theme.colors.outlineVariant }]}
+          >
             <ScalePressable
               onPress={() => router.push("/backup")}
               scaleTo={0.99}
@@ -285,7 +343,9 @@ export function SettingsScreen() {
             About
           </AppText>
 
-          <View style={[styles.group, { borderColor: theme.colors.outlineVariant }]}>
+          <View
+            style={[styles.group, { borderColor: theme.colors.outlineVariant }]}
+          >
             <InfoRow
               icon="paperclip"
               title={`Paperclip ${version}`}

@@ -2,86 +2,119 @@
 
 Paperclip is an Android-first, local-first library for links: save links from
 other apps or by hand, see visual preview cards, organize them into folders,
-search locally, and protect private folders.
+search locally, read saved articles in a distraction-free reader, and protect
+private folders behind device authentication.
 
-The product contract lives in [`AGENTS.md`](AGENTS.md) and the [`docs/`](docs/)
-folder (PRD, TRD, schema, user flows, UI/UX, design system, architecture).
+There is no account, backend, cloud sync, analytics, or advertising. SQLite is
+the source of truth and the library works offline.
 
-## Current state
+## Screenshots
 
-Implemented:
+Runtime screenshots have not been captured automatically because the app
+requires a native development build and a connected Android device. The images
+below are the Figma design references kept in this repository; they are not
+current runtime captures.
 
-- Three-tab shell (Home, Folders, Settings) with a floating capsule navigation
-  bar, horizontal tab swiping, a four-item Recent folders carousel, and a
-  two-column Recently saved grid. View all is hidden when a section is empty.
-- Folder create, rename, delete (with the two documented deletion choices), and
-  recent-folder ordering in SQLite.
-- Manual Save Link flow with URL validation, automatic title/description from
-  page metadata, optional note, folder picker, duplicate confirmation, and
-  save-before-preview behaviour. Saved links appear in All bookmarks, folders,
-  and search.
-- Bookmark actions from every card via long press: edit title/note, add/remove
-  favourite, move folder, copy, share, refresh preview, and delete.
-- Favourites collection with the same layout, sort, and empty-state treatment as
-  All bookmarks; a heart marks favourited cards.
-- Extended Save-link FAB collapses to a circular + while scrolling down and
-  expands on scroll-up.
-- Android Sharesheet capture for shared links with a two-action chooser:
-  **Save** opens the full form; **Quick save** stores immediately with a toast
-  and refreshes metadata in the background.
-- A 2×2 smart-collection grid (All bookmarks, Favourites, Uncategorized,
-  Private). Private folders live behind one biometric/device-PIN gate and are
-  not shown with private badges elsewhere. The gate is app-level, not at-rest
-  encryption, and clears when the app leaves the foreground.
-- Folder details keeps the folder name in the top app bar and omits the large
-  folder summary header.
+<table>
+  <tr>
+    <td><img src="docs/figma/01%20%E2%80%94%20Library.png" width="240" alt="Library design reference" /></td>
+    <td><img src="docs/figma/03%20%E2%80%94%20Folder%20detail.png" width="240" alt="Folder detail design reference" /></td>
+    <td><img src="docs/figma/08%20%E2%80%94%20Settings.png" width="240" alt="Settings design reference" /></td>
+    <td><img src="docs/figma/10%20%E2%80%94%20Dark%20theme.png" width="240" alt="Dark theme design reference" /></td>
+  </tr>
+</table>
+
+## Highlights
+
+### Library and organization
+- Three primary destinations: **Home**, **Folders**, and **Settings**.
+- Home shows recent folders and a four-item Recently saved preview.
+- Folders is the full library: All bookmarks, Favourites, Uncategorized, and
+  user-created folders.
+- Grid, list, and card bookmark layouts with persisted sort order.
+- Search across titles, URLs, domains, descriptions, notes, and folder names.
+- Visual preview cards with locally cached preview images and designed
+  fallbacks.
+- Folder colours, rename, safe deletion options, and recents ordering.
+
+### Capture and previews
+- Android Sharesheet integration with **Save** and **Quick save** actions.
+- Manual URL save flow with validation, optional notes, folder selection, and
+  duplicate handling.
+- YouTube oEmbed and Reddit social-card metadata fallbacks for sites that block
+  generic metadata requests.
+- Preview images cached in app-managed storage and refreshed with bounded retry
+  behaviour.
+
+### Reading and listening
+- Article-like links open in the in-app reader; social, video, and media links
+  open externally.
+- Cached article text for offline reading.
+- Article images, including lazy `data-src`, `data-original`, and `srcset`
+  sources. Small social icons are filtered out.
+- Reader controls for typeface, text size, white/sepia/grey/black page colours,
+  and optional horizontal pagination.
+- A persistent listening player with play/pause, previous/next section,
+  draggable seeking, and 0.75×–1.5× speech speeds.
+- Playback continues while navigating outside the reader. The mini player can
+  be reopened or closed with the X button.
+
+### Appearance and interaction
+- Paperclip light and dark themes, five accent palettes, and AMOLED black.
+- Android 12+ dynamic colour for native Material controls when enabled.
+- Google Sans Flex typography for the app and reader.
+- Material 3 Expressive-inspired controls, shapes, and Reanimated interaction
+  feedback.
+- Radial-ink press feedback clipped to each control, plus scale feedback only
+  for the theme selector.
+
+### Privacy and data
+- Private folders gated by biometrics or device PIN.
+- The private-folder gate is **app-level lock only**; database encryption is not
+  enabled in this build. The gate clears when the app leaves the foreground.
 - Versioned public JSON export/import with folders, links, notes, favourites,
-  and cached preview images. Private folders are excluded.
-- Distraction-free article reader with a cached offline copy and Android
-  text-to-speech playback.
-- Bookmark details screen with full preview, description, note, folder/source
-  metadata, open/copy actions, and the shared action menu.
-- Platform-aware metadata: YouTube oEmbed and Reddit's social-crawler Open
-  Graph share card provide titles and fillable previews where generic HTML is
-  blocked.
-- Local preview-image caching from Open Graph/Twitter metadata, rendered from
-  app-managed files; preview refresh and asset cleanup on delete.
-- Persisted Grid / List / Cards layout and sort order (newest, oldest, title)
-  for folder and collection bookmark lists.
-- Local library foundation: `expo-sqlite` database, versioned migration,
-  folders/bookmarks/settings schema, typed repositories.
-- Search, All bookmarks, and Uncategorized routes with real data and empty
-  states.
-- Paperclip light/dark themes with persisted appearance.
-- Native Material 3 controls through `@expo/ui` (buttons, text fields, segmented
-  control, loading indicator), themed from Paperclip tokens.
+  and cached preview images. Private folders and their contents are excluded.
+- Import validates before changing the library.
 
-Not implemented yet: Android share-intent capture, private folders, backups, and
-tests/lint setup.
+## Tech stack
+
+- Expo SDK 58, React Native 0.88, React 19, TypeScript strict
+- Expo Router with the three-tab floating capsule navigation
+- `expo-sqlite` for the local database and `PRAGMA user_version` migrations
+- `@expo/ui` Jetpack Compose for native Material controls
+- React Native Reanimated for interaction and reader motion
+- `expo-share-intent`, `expo-local-authentication`, `expo-speech`,
+  `expo-file-system`, and `expo-image`
+- Google Sans Flex variable font, licensed under the SIL Open Font License
+  ([license](assets/fonts/OFL.txt))
 
 ## Run it
 
+Prerequisites: Node.js, npm, and an Android device with the Paperclip
+development build installed.
+
 ```bash
 npm install
-npx expo start
+npx expo start --dev-client --host lan --port 8081 --clear
 ```
 
-Open the installed Paperclip development build on the Android device. Expo Go
-can no longer load the app once the native share-intent module is included.
+Expo Go is not sufficient: share-intent capture, device authentication, and
+native speech require a development/native build.
 
 ## Android development build
 
-The Android application ID is `com.arkp.paperclip` (set in `app.json`). It is
-required for a development/native build and for Google Play; Expo Go ignores it.
+The application ID is `com.arkp.paperclip`, configured in
+[`app.json`](app.json).
 
 ```bash
 npx eas-cli@latest login
 npx eas-cli@latest build --profile development --platform android
 ```
 
-`eas.json` defines `development` (development client), `preview`, and
-`production` profiles. Share-intent capture, SQLCipher private folders, and
-backup/restore need this native build and cannot be verified in Expo Go.
+`eas.json` defines `development`, `preview`, and `production` profiles. Build a
+new development client whenever native configuration or native modules change,
+including `expo-speech`, share intents, local authentication, and predictive
+back.
 
 ## Checks
 
@@ -89,30 +122,44 @@ backup/restore need this native build and cannot be verified in Expo Go.
 npx tsc --noEmit
 ```
 
-The Android bundle is compiled by Metro (`npx expo start` → open the app).
-ESLint and unit tests are not configured yet.
+The Android bundle is compiled by Metro. ESLint configuration remains minimal
+and the repository does not yet have an automated unit/component test suite.
 
-## Architecture notes
+## Architecture
 
-- `src/app/` contains thin Expo Router routes; the `(main)` group holds the
-  three primary tabs.
-- `src/features/` owns product behavior (home, folders, bookmarks, search,
-  settings).
-- `src/core/` owns database/migrations and preferences.
-- `src/shared/ui/` contains the screen shell, floating navigation, cards, and
-  native Material 3 control wrappers.
-- `src/styles/` contains every static `StyleSheet` definition, mirroring the
-  feature/shared structure; components import their styles from here.
-- `src/theme/` contains the semantic color, type, spacing, shape, and motion
-  tokens.
+- `src/app/` — thin Expo Router routes and layouts.
+- `src/features/` — home, folders, bookmarks, search, save link, backup, reader,
+  and settings behavior.
+- `src/core/` — SQLite connection/migrations, preferences, filesystem, and
+  security session.
+- `src/shared/ui/` — screen shell, cards, dialogs, overflow menus, native
+  Material wrappers, and interaction primitives.
+- `src/styles/` — static feature and shared `StyleSheet` definitions.
+- `src/theme/` — semantic colour, typography, spacing, shape, and motion tokens.
 
-Native Material 3 controls use `@expo/ui` Jetpack Compose components; Paperclip
-cards, layouts, and the floating capsule remain React Native per the
-architecture documents. See
+Native Material controls use `@expo/ui`; Paperclip cards, layouts, reader pages,
+and the floating navigation remain React Native. See
 [ADR 0001](docs/decisions/0001-native-material3-component-layer.md).
 
-## App identity
+The product contract and implementation decisions live in [`AGENTS.md`](AGENTS.md)
+and [`docs/`](docs/).
 
-Expo project name/slug/scheme are `Paperclip`/`paperclip`/`paperclip`. No
-Android application ID has been committed yet; it is required before the first
-development or EAS build.
+## Known limitations
+
+- Private folder records and private reader data live in a separate SQLCipher
+  vault (`paperclip-private.db`). The vault key is stored in Expo SecureStore
+  (Android Keystore-backed), but key release is still gated by the app’s
+  biometric/device-PIN flow rather than a cryptographically auth-bound native
+  Keystore key.
+- Private preview images are not retained. They are deleted when a folder
+  becomes private so no private image files remain in plaintext app storage.
+  Existing private data from builds before this change is removed on first
+  launch.
+- Dynamic colour affects native Compose controls; React Native surfaces keep
+  the selected Paperclip accent because the wallpaper palette is not exposed to
+  JS.
+- Article text is cached locally, but article images depend on the source
+  server and the platform image cache. Reader article images use the in-memory
+  image cache only.
+- Predictive back, native speech, SQLCipher, and SecureStore require a rebuilt
+  development client.

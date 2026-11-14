@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 
+import { cleanupLegacyPlaintextPrivateData } from "./legacyPrivateDataCleanup";
 import { runMigrations } from "./migrations";
 
 const DATABASE_NAME = "paperclip.db";
@@ -26,5 +27,6 @@ async function openAndPrepareDatabase(): Promise<SQLite.SQLiteDatabase> {
   await database.execAsync("PRAGMA journal_mode = WAL;");
   await database.execAsync("PRAGMA foreign_keys = ON;");
   await runMigrations(database);
+  await cleanupLegacyPlaintextPrivateData(database);
   return database;
 }

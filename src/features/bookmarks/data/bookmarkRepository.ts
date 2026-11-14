@@ -1,4 +1,16 @@
 import { getDatabase } from "@/core/database/database";
+import {
+  deleteVaultBookmark,
+  getVaultBookmarkById,
+  isVaultBookmark,
+  isVaultFolder,
+  listVaultBookmarksInFolder,
+  moveVaultBookmark,
+  moveVaultBookmarkToPublic,
+  updateVaultBookmarkContent,
+  updateVaultBookmarkFavorite,
+} from "@/core/database/privateVaultRepository";
+import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
 import {
@@ -181,6 +193,9 @@ export async function getReadableBookmarkById(
   }
 
   if (bookmark.folderId) {
+    if (await isVaultFolder(bookmark.folderId)) {
+      return isPrivateSpaceUnlocked() ? bookmark : null;
+    }
     const database = await getDatabase();
     const folder = await database.getFirstAsync<{ isPrivate: number }>(
       "SELECT is_private AS isPrivate FROM folders WHERE id = ?",
@@ -205,6 +220,12 @@ export async function listBookmarksInFolder(
     folderId
   );
   if (!folder) {
+    if (await isVaultFolder(folderId)) {
+      if (!isPrivateSpaceUnlocked()) {
+        throw new PrivateFolderLockedError();
+      }
+      return listVaultBookmarksInFolder(folderId, sort);
+    }
     throw new FolderNotFoundError();
   }
   if (folder.isPrivate === 1 && !isPrivateSpaceUnlocked()) {
@@ -263,7 +284,14 @@ export async function getBookmarkById(id: string): Promise<Bookmark | null> {
      WHERE b.id = ?`,
     id
   );
-  return row ? mapBookmarkRow(row) : null;
+  const bookmark = row ? mapBookmarkRow(row) : null;
+  if (bookmark) {
+    return bookmark;
+  }
+  if (isPrivateVaultOpen()) {
+    return getVaultBookmarkById(id);
+  }
+  return null;
 }
 
 /**
@@ -288,9 +316,14 @@ export async function findBookmarkByUrl(rawUrl: string): Promise<Bookmark | null
   return match ? mapBookmarkRow(match) : null;
 }
 
-export async function setBookmarkFavorite(  id: string,
+export async function setBookmarkFavorite(
+  id: string,
   isFavorite: boolean
 ): Promise<void> {
+  if (await isVaultBookmark(id)) {
+    await updateVaultBookmarkFavorite(id, isFavorite);
+    return;
+  }
   const database = await getDatabase();
   const result = await database.runAsync(
     "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
@@ -313,6 +346,11 @@ export async function updateBookmarkContent(
     throw new Error("A bookmark needs a title.");
   }
 
+  if (await isVaultBookmark(id)) {
+    await updateVaultBookmarkContent(id, { title, note: input.note });
+    return;
+  }
+
   const database = await getDatabase();
   const result = await database.runAsync(
     `UPDATE bookmarks
@@ -330,6 +368,15 @@ export async function updateBookmarkContent(
 }
 
 export async function moveBookmark(id: string, folderId: string | null): Promise<void> {
+  if (await isVaultBookmark(id)) {
+    if (folderId && (await isVaultFolder(folderId))) {
+      await moveVaultBookmark(id, folderId);
+      return;
+    }
+    await moveVaultBookmarkToPublic(id, folderId);
+    return;
+  }
+
   const database = await getDatabase();
   const result = await database.runAsync(
     "UPDATE bookmarks SET folder_id = ?, updated_at = ? WHERE id = ?",
@@ -421,6 +468,10 @@ export async function updateBookmarkMetadata(
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
+  if (await isVaultBookmark(id)) {
+    await deleteVaultBookmark(id);
+    return;
+  }
   const database = await getDatabase();
   const result = await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
 

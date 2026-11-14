@@ -1,4 +1,5 @@
 import { getDatabase } from "@/core/database/database";
+import { isVaultBookmark } from "@/core/database/privateVaultRepository";
 import {
   getBookmarkById,
   deleteBookmark,
@@ -51,6 +52,9 @@ export async function enrichBookmarkPreview(
  * Re-fetches metadata and the preview image for an existing public bookmark.
  */
 export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> {
+  if (await isVaultBookmark(bookmarkId)) {
+    throw new Error("Private previews stay inside the encrypted vault.");
+  }
   const bookmark = await getBookmarkById(bookmarkId);
   if (!bookmark) {
     throw new Error("This bookmark no longer exists.");
