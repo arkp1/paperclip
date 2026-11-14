@@ -102,6 +102,13 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
         await setFolderPrivate(folder.id, false);
         await reload();
       } else {
+        const unlocked = await unlockPrivateSpace();
+        if (!unlocked.success) {
+          if (unlocked.message !== "Unlock cancelled.") {
+            Alert.alert("Private folders", unlocked.message);
+          }
+          return;
+        }
         await setFolderPrivate(folder.id, true);
         router.back();
       }

@@ -1,4 +1,18 @@
 import { getDatabase } from "@/core/database/database";
+import {
+  countVaultFolders,
+  createVaultFolder,
+  deleteVaultFolder,
+  getVaultFolderById,
+  getVaultFolders,
+  isVaultFolder,
+  markVaultFolderOpened,
+  movePublicFolderToVault,
+  moveVaultFolderToPublic,
+  updateVaultFolderColor,
+  updateVaultFolderName,
+} from "@/core/database/privateVaultRepository";
+import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -98,23 +112,11 @@ export async function getPrivateFolders(): Promise<Folder[]> {
   if (!isPrivateSpaceUnlocked()) {
     throw new Error("Private folders are locked.");
   }
-
-  const database = await getDatabase();
-  const rows = await database.getAllAsync<FolderRow>(
-    `${PRIVATE_FOLDER_SELECT}
-     WHERE f.is_private = 1
-     GROUP BY f.id
-     ORDER BY f.name COLLATE NOCASE ASC`
-  );
-  return rows.map(mapFolderRow);
+  return getVaultFolders();
 }
 
 export async function countPrivateFolders(): Promise<number> {
-  const database = await getDatabase();
-  const row = await database.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM folders WHERE is_private = 1"
-  );
-  return row?.count ?? 0;
+  return countVaultFolders();
 }
 
 /**
@@ -140,6 +142,10 @@ export async function setFolderColor(
   folderId: string,
   colorKey: FolderColorKey | null
 ): Promise<void> {
+  if (await isVaultFolder(folderId)) {
+    await updateVaultFolderColor(folderId, colorKey);
+    return;
+  }
   const database = await getDatabase();
   const result = await database.runAsync(
     "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
@@ -157,10 +163,25 @@ export async function setFolderPrivate(
   folderId: string,
   isPrivate: boolean
 ): Promise<void> {
+  if (isPrivate) {
+    if (!isPrivateSpaceUnlocked()) {
+      throw new Error("Unlock the private space first.");
+    }
+    if (await isVaultFolder(folderId)) {
+      return;
+    }
+    await movePublicFolderToVault(folderId);
+    return;
+  }
+
+  if (await isVaultFolder(folderId)) {
+    await moveVaultFolderToPublic(folderId);
+    return;
+  }
+
   const database = await getDatabase();
   const result = await database.runAsync(
-    "UPDATE folders SET is_private = ?, updated_at = ? WHERE id = ?",
-    isPrivate ? 1 : 0,
+    "UPDATE folders SET is_private = 0, updated_at = ? WHERE id = ?",
     Date.now(),
     folderId
   );
@@ -178,7 +199,13 @@ export async function getFolderById(id: string): Promise<Folder | null> {
      GROUP BY f.id`,
     id
   );
-  return row ? mapFolderRow(row) : null;
+  if (row) {
+    return mapFolderRow(row);
+  }
+  if (isPrivateVaultOpen()) {
+    return getVaultFolderById(id);
+  }
+  return null;
 }
 
 export async function createFolder(input: CreateFolderInput): Promise<Folder> {
@@ -221,10 +248,32 @@ export async function createFolder(input: CreateFolderInput): Promise<Folder> {
   return folder;
 }
 
+export async function createPrivateFolder(
+  input: CreateFolderInput
+): Promise<Folder> {
+  const validation = validateFolderName(input.name);
+  if (!validation.valid) {
+    throw new InvalidFolderNameError(validation.message);
+  }
+  try {
+    return await createVaultFolder(
+      validation.name,
+      input.colorKey ?? "lavender"
+    );
+  } catch (error) {
+    throw mapFolderWriteError(error);
+  }
+}
+
 export async function renameFolder(id: string, name: string): Promise<void> {
   const validation = validateFolderName(name);
   if (!validation.valid) {
     throw new InvalidFolderNameError(validation.message);
+  }
+
+  if (await isVaultFolder(id)) {
+    await updateVaultFolderName(id, validation.name);
+    return;
   }
 
   const database = await getDatabase();
@@ -251,6 +300,11 @@ export async function deleteFolder(
   id: string,
   strategy: FolderDeleteStrategy
 ): Promise<void> {
+  if (await isVaultFolder(id)) {
+    await deleteVaultFolder(id, strategy);
+    return;
+  }
+
   const database = await getDatabase();
   const previewPaths =
     strategy === "deleteBookmarks"
@@ -291,6 +345,10 @@ export async function deleteFolder(
  * touch updated_at because access history is not a content change.
  */
 export async function markFolderOpened(id: string, openedAt: number): Promise<void> {
+  if (await isVaultFolder(id)) {
+    await markVaultFolderOpened(id, openedAt);
+    return;
+  }
   const database = await getDatabase();
   await database.runAsync(
     "UPDATE folders SET last_opened_at = ? WHERE id = ?",

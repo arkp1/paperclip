@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 
 import { AppText } from "@/shared/ui/AppText";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
@@ -43,12 +43,12 @@ function getBarBottomOffset(bottomInset: number): number {
  */
 export function useFloatingNavigationInset(): number {
   const insets = useSafeAreaInsets();
-  const { track } = useReaderAudio();
+  const playerInset = useReaderAudioInset();
   return (
     getBarBottomOffset(insets.bottom) +
     CAPSULE_HEIGHT +
     CONTENT_GAP_ABOVE_BAR +
-    (track ? 80 : 0)
+    playerInset
   );
 }
 

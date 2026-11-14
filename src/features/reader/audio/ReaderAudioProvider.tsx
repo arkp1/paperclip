@@ -65,3 +65,11 @@ export function useReaderAudio(): ReaderAudioContextValue {
   }
   return value;
 }
+
+/**
+ * Bottom spacing screens should reserve while the mini player is visible.
+ */
+export function useReaderAudioInset(): number {
+  const { track } = useReaderAudio();
+  return track ? 80 : 0;
+}

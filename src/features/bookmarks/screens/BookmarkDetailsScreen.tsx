@@ -6,6 +6,7 @@ import { ScrollView, View } from "react-native";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { useBookmarkDetails } from "@/features/bookmarks/hooks/useBookmarkDetails";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -30,6 +31,7 @@ export function BookmarkDetailsScreen({
   const router = useRouter();
   const { bookmark, status, errorMessage, reload } =
     useBookmarkDetails(bookmarkId);
+  const audioInset = useReaderAudioInset();
   const [actionsVisible, setActionsVisible] = useState(false);
 
   const previewUri = bookmark?.previewImagePath
@@ -68,7 +70,7 @@ export function BookmarkDetailsScreen({
         <>
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, { paddingBottom: audioInset + 24 }]}
           >
             {previewUri ? (
               <Image

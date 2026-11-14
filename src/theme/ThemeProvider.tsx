@@ -18,6 +18,7 @@ export type ThemeMode = "system" | "light" | "dark";
 const THEME_MODE_SETTING_KEY = "theme_mode";
 const AMOLED_SETTING_KEY = "theme_amoled";
 const DYNAMIC_SETTING_KEY = "theme_dynamic";
+const FOLDER_TONAL_SETTING_KEY = "folder_tonal_cards";
 const ACCENT_SETTING_KEY = "accent_color";
 
 type ThemeContextValue = {
@@ -27,10 +28,12 @@ type ThemeContextValue = {
   accent: AccentKey;
   amoled: boolean;
   dynamic: boolean;
+  folderTonal: boolean;
   setMode: (mode: ThemeMode) => void;
   setAccent: (accent: AccentKey) => void;
   setAmoled: (enabled: boolean) => void;
   setDynamic: (enabled: boolean) => void;
+  setFolderTonal: (enabled: boolean) => void;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -52,6 +55,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [accent, setAccentState] = useState<AccentKey>("violet");
   const [amoled, setAmoledState] = useState(false);
   const [dynamic, setDynamicState] = useState(false);
+  const [folderTonal, setFolderTonalState] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,25 +64,37 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       getSetting(THEME_MODE_SETTING_KEY),
       getSetting(AMOLED_SETTING_KEY),
       getSetting(DYNAMIC_SETTING_KEY),
+      getSetting(FOLDER_TONAL_SETTING_KEY),
       getSetting(ACCENT_SETTING_KEY),
     ])
-      .then(([storedMode, storedAmoled, storedDynamic, storedAccent]) => {
-        if (cancelled) {
-          return;
+      .then(
+        ([
+          storedMode,
+          storedAmoled,
+          storedDynamic,
+          storedFolderTonal,
+          storedAccent,
+        ]) => {
+          if (cancelled) {
+            return;
+          }
+          if (isThemeMode(storedMode)) {
+            setModeState(storedMode);
+          }
+          if (storedAmoled === "true") {
+            setAmoledState(true);
+          }
+          if (storedDynamic === "true") {
+            setDynamicState(true);
+          }
+          if (storedFolderTonal === "true") {
+            setFolderTonalState(true);
+          }
+          if (isAccentKey(storedAccent)) {
+            setAccentState(storedAccent);
+          }
         }
-        if (isThemeMode(storedMode)) {
-          setModeState(storedMode);
-        }
-        if (storedAmoled === "true") {
-          setAmoledState(true);
-        }
-        if (storedDynamic === "true") {
-          setDynamicState(true);
-        }
-        if (isAccentKey(storedAccent)) {
-          setAccentState(storedAccent);
-        }
-      })
+      )
       .catch(() => {
         // The database gate reports storage failures; appearance falls back to
         // the system setting so the app can still render.
@@ -117,6 +133,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setFolderTonal = useCallback((enabled: boolean) => {
+    setFolderTonalState(enabled);
+    void setSetting(FOLDER_TONAL_SETTING_KEY, enabled ? "true" : "false").catch(
+      () => {
+        console.warn("Could not persist the folder tint preference.");
+      }
+    );
+  }, []);
+
   const value = useMemo<ThemeContextValue>(() => {
     const scheme = resolveScheme(
       mode,
@@ -129,19 +154,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       accent,
       amoled,
       dynamic,
+      folderTonal,
       setMode,
       setAccent,
       setAmoled,
       setDynamic,
+      setFolderTonal,
     };
   }, [
     accent,
     amoled,
     dynamic,
+    folderTonal,
     mode,
     setAccent,
     setAmoled,
     setDynamic,
+    setFolderTonal,
     setMode,
     systemScheme,
   ]);

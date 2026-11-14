@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import {
   getFolderById,
   markFolderOpened,
@@ -29,7 +30,7 @@ export function useFolderDetails(folderId: string) {
         return;
       }
 
-      if (folder.isPrivate) {
+      if (folder.isPrivate && !isPrivateVaultOpen()) {
         setState({ folder, status: "locked", errorMessage: null });
         return;
       }

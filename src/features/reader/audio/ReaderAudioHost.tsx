@@ -11,6 +11,13 @@ import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
 export function ReaderAudioHost() {
   const { track, clear } = useReaderAudio();
   const pathname = usePathname();
+  const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+  const inReader = normalizedPath === "/read" || normalizedPath.startsWith("/read/");
+  const isMainTab =
+    normalizedPath === "/" ||
+    normalizedPath === "/folders" ||
+    normalizedPath === "/settings";
+  const bottomOffset = inReader ? 12 : isMainTab ? 96 : 12;
 
   if (!track) {
     return null;
@@ -22,7 +29,7 @@ export function ReaderAudioHost() {
         key={track.id}
         title={track.title}
         paragraphs={track.paragraphs}
-        bottomOffset={pathname.startsWith("/read") ? 12 : 96}
+        bottomOffset={bottomOffset}
         onClose={clear}
       />
     </View>

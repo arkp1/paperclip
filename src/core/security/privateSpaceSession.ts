@@ -1,6 +1,12 @@
 import { useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
+import { Image } from "expo-image";
+
+import {
+  closePrivateVault,
+  getPrivateVault,
+} from "@/core/database/privateVault";
 
 let privateSpaceUnlocked = false;
 const listeners = new Set<() => void>();
@@ -36,6 +42,8 @@ export function lockPrivateSpace(): void {
   }
   privateSpaceUnlocked = false;
   emit();
+  void closePrivateVault();
+  void Image.clearMemoryCache().catch(() => undefined);
 }
 
 export type UnlockPrivateSpaceResult =
@@ -50,33 +58,77 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   ensureAppStateListener();
 
   try {
-    const result = await LocalAuthentication.authenticateAsync({
+    const enrolledLevel =
+      await LocalAuthentication.getEnrolledLevelAsync();
+    if (enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
+      return {
+        success: false,
+        message:
+          "Set up a device PIN, pattern, password, or biometric first. Private folders need one of these.",
+      };
+    }
+  } catch {
+    // Some devices cannot report the enrolled level; let the authentication
+    // prompt decide instead of failing the whole flow.
+  }
+
+  let result: LocalAuthentication.LocalAuthenticationResult;
+  try {
+    result = await LocalAuthentication.authenticateAsync({
       promptMessage: "Unlock private folders",
       cancelLabel: "Cancel",
       fallbackLabel: "Use device PIN",
       disableDeviceFallback: false,
     });
-
-    if (!result.success) {
-      return {
-        success: false,
-        message:
-          result.error === "user_cancel"
-            ? "Unlock cancelled."
-            : "Authentication failed. Try again.",
-      };
-    }
-
-    privateSpaceUnlocked = true;
-    emit();
-    return { success: true };
   } catch (error) {
-    console.warn("Could not authenticate the private folder space.", error);
+    console.warn("Device authentication could not start.", error);
     return {
       success: false,
-      message: "Device authentication is unavailable.",
+      message: isMissingNativeModule(error)
+        ? "This development build is missing the authentication modules. Install the new development build."
+        : "Device authentication is unavailable on this device.",
     };
   }
+
+  if (!result.success) {
+    return {
+      success: false,
+      message:
+        result.error === "user_cancel"
+          ? "Unlock cancelled."
+          : result.error === "not_enrolled" ||
+              result.error === "not_available"
+            ? "Set up a device PIN or biometric authentication first."
+            : "Authentication failed. Try again.",
+    };
+  }
+
+  try {
+    await getPrivateVault();
+  } catch (error) {
+    console.warn("The private vault could not be opened.", error);
+    return {
+      success: false,
+      message: isMissingNativeModule(error)
+        ? "This development build is missing SecureStore/SQLCipher. Install the new development build."
+        : error instanceof Error && error.message.includes("SQLCipher")
+          ? "Encrypted storage is unavailable in this build. Rebuild the development client."
+          : error instanceof Error && error.message.includes("encrypted")
+            ? "The private vault could not be opened securely."
+            : __DEV__
+              ? `Private vault error: ${error instanceof Error ? error.message : String(error)}`
+              : "Device authentication succeeded, but the private vault could not be opened.",
+    };
+  }
+
+  privateSpaceUnlocked = true;
+  emit();
+  return { success: true };
+}
+
+function isMissingNativeModule(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /native module|ExpoSecureStore|ExpoCrypto|SQLCipher/i.test(message);
 }
 
 export function usePrivateSpaceSession() {

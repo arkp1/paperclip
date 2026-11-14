@@ -15,6 +15,7 @@ import {
 } from "@/features/bookmarks/data/bookmarkRepository";
 import { enrichBookmarkPreview } from "@/features/bookmarks/services/previewService";
 import { cacheArticleInBackground } from "@/features/reader/services/articleService";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import type { Bookmark, PreviewStatus } from "@/features/bookmarks/types";
 import { FolderPickerDialog } from "@/features/folders/components/FolderPickerDialog";
 import { useFolders } from "@/features/folders/hooks/useFolders";
@@ -46,6 +47,7 @@ export function SaveLinkScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const audioInset = useReaderAudioInset();
   const { folders } = useFolders();
   const params = useLocalSearchParams<{ sharedUrl?: string | string[] }>();
   const sharedUrlParam =
@@ -221,7 +223,7 @@ export function SaveLinkScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: insets.bottom + spacing[8] },
+            { paddingBottom: insets.bottom + spacing[8] + audioInset },
           ]}
           keyboardShouldPersistTaps="handled"
         >

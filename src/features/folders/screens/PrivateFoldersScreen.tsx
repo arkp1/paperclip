@@ -13,7 +13,7 @@ import { FolderCard } from "@/features/folders/components/FolderCard";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import {
-  createFolder,
+  createPrivateFolder,
   deleteFolder,
   getPrivateFolders,
   renameFolder as renameFolderRecord,
@@ -94,8 +94,7 @@ export function PrivateFoldersScreen() {
     colorKey: FolderColorKey
   ): Promise<string | null> => {
     try {
-      const folder = await createFolder({ name, colorKey });
-      await setFolderPrivate(folder.id, true);
+      await createPrivateFolder({ name, colorKey });
       await load();
       return null;
     } catch (error) {

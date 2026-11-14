@@ -1,4 +1,9 @@
 import { getDatabase } from "@/core/database/database";
+import {
+  getVaultArticle,
+  isVaultBookmark,
+  saveVaultArticle,
+} from "@/core/database/privateVaultRepository";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { isReadableArticleUrl } from "@/features/reader/utils/isReadableArticleUrl";
 
@@ -79,19 +84,22 @@ async function getCachedArticle(
   bookmarkId: string,
   allowStale = false
 ): Promise<CachedArticle | null> {
-  const database = await getDatabase();
-  const row = await database.getFirstAsync<{
-    blocks: string;
-    wordCount: number;
-    fetchedAt: number;
-    cacheVersion: number;
-  }>(
-    `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
-            cache_version AS cacheVersion
-     FROM article_contents
-     WHERE bookmark_id = ?`,
-    bookmarkId
-  );
+  const row = (await isVaultBookmark(bookmarkId))
+    ? await getVaultArticle(bookmarkId)
+    : await (
+        await getDatabase()
+      ).getFirstAsync<{
+        blocks: string;
+        wordCount: number;
+        fetchedAt: number;
+        cacheVersion: number;
+      }>(
+        `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
+                cache_version AS cacheVersion
+         FROM article_contents
+         WHERE bookmark_id = ?`,
+        bookmarkId
+      );
 
   if (
     !row ||
@@ -120,6 +128,16 @@ async function saveArticle(
   bookmarkId: string,
   article: CachedArticle
 ): Promise<void> {
+  if (await isVaultBookmark(bookmarkId)) {
+    await saveVaultArticle(
+      bookmarkId,
+      JSON.stringify(article.blocks),
+      article.wordCount,
+      article.fetchedAt,
+      ARTICLE_CACHE_VERSION
+    );
+    return;
+  }
   const database = await getDatabase();
   await database.runAsync(
     `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)

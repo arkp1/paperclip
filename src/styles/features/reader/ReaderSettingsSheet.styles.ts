@@ -3,6 +3,9 @@ import { StyleSheet } from "react-native";
 import { spacing } from "@/theme";
 
 export const styles = StyleSheet.create({
+  sheetScroll: {
+    maxHeight: 470,
+  },
   content: {
     gap: spacing[4],
   },
