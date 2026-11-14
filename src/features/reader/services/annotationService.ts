@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
 import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import {
   getVaultSetting,
   setVaultSetting,
@@ -46,6 +47,18 @@ function keyFor(bookmarkId: string) {
 export function blockAnnotationKey(block: {
   type: string;
   text?: string;
+  sourceKey?: string;
+}): string {
+  if (block.sourceKey) {
+    return block.sourceKey;
+  }
+  return contentAnnotationKey(block);
+}
+
+/** Legacy key format used by annotations saved before stable block IDs. */
+export function contentAnnotationKey(block: {
+  type: string;
+  text?: string;
 }): string {
   return `${block.type}:${(block.text ?? "").slice(0, 120)}`;
 }
@@ -80,16 +93,18 @@ export async function saveAnnotations(
   bookmarkId: string,
   annotations: ReaderAnnotation[]
 ): Promise<void> {
-  const privacy = await getBookmarkPrivacy(bookmarkId);
-  if (privacy === "unavailable") {
-    throw new Error("The private vault is locked. Annotations were not saved.");
-  }
-  const serialized = JSON.stringify(annotations);
-  if (privacy === "private") {
-    await setVaultSetting(keyFor(bookmarkId), serialized);
-    return;
-  }
-  await setSetting(keyFor(bookmarkId), serialized);
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked. Annotations were not saved.");
+    }
+    const serialized = JSON.stringify(annotations);
+    if (privacy === "private") {
+      await setVaultSetting(keyFor(bookmarkId), serialized);
+      return;
+    }
+    await setSetting(keyFor(bookmarkId), serialized);
+  });
 }
 
 function isAnnotation(value: unknown): value is ReaderAnnotation {

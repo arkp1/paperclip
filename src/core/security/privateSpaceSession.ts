@@ -95,6 +95,10 @@ export type UnlockPrivateSpaceResult =
  */
 export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   ensureAppStateListener();
+  // A second authorization attempt must not inherit an already-open session.
+  if (privateSpaceUnlocked) {
+    lockPrivateSpace();
+  }
   const attempt = unlockGeneration;
 
   try {
@@ -185,18 +189,35 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     return { success: false, message: "Unlock cancelled." };
   }
 
-  privateSpaceUnlocked = true;
   if (screenCaptureAllowTimer) {
     clearTimeout(screenCaptureAllowTimer);
     screenCaptureAllowTimer = null;
   }
   screenCaptureProtected = true;
-  await ScreenCapture.preventScreenCaptureAsync("paperclip-private").catch(
-    (error: unknown) => {
-      screenCaptureProtected = false;
-      console.warn("Could not enable app-switcher protection.", error);
-    }
-  );
+  try {
+    await ScreenCapture.preventScreenCaptureAsync("paperclip-private");
+  } catch (error) {
+    screenCaptureProtected = false;
+    await closePrivateVault();
+    console.warn("Could not enable app-switcher protection.", error);
+    return {
+      success: false,
+      message:
+        "Private content could not be protected from screenshots or the app switcher. The private session was not opened.",
+    };
+  }
+  if (
+    attempt !== unlockGeneration ||
+    AppState.currentState !== "active"
+  ) {
+    screenCaptureProtected = false;
+    await closePrivateVault();
+    await ScreenCapture.allowScreenCaptureAsync("paperclip-private").catch(
+      () => undefined
+    );
+    return { success: false, message: "Unlock cancelled." };
+  }
+  privateSpaceUnlocked = true;
   emit();
   return { success: true };
 }

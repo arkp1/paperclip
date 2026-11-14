@@ -146,21 +146,23 @@ export async function setFolderColor(
   folderId: string,
   colorKey: FolderColorKey | null
 ): Promise<void> {
-  if (await isVaultFolder(folderId)) {
-    await updateVaultFolderColor(folderId, colorKey);
-    return;
-  }
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
-    colorKey,
-    Date.now(),
-    folderId
-  );
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(folderId)) {
+      await updateVaultFolderColor(folderId, colorKey);
+      return;
+    }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
+      colorKey,
+      Date.now(),
+      folderId
+    );
 
-  if (result.changes === 0) {
-    throw new FolderNotFoundError();
-  }
+    if (result.changes === 0) {
+      throw new FolderNotFoundError();
+    }
+  });
 }
 
 export async function setFolderPrivate(
@@ -285,72 +287,78 @@ export async function renameFolder(id: string, name: string): Promise<void> {
   }
 
   if (await isVaultFolder(id)) {
-    await updateVaultFolderName(id, validation.name);
+    await withPrivacyWriteLock(() =>
+      updateVaultFolderName(id, validation.name)
+    );
     return;
   }
 
-  const database = await getDatabase();
+  return withPrivacyWriteLock(async () => {
+    const database = await getDatabase();
 
-  try {
-    const result = await database.runAsync(
-      "UPDATE folders SET name = ?, updated_at = ? WHERE id = ?",
-      validation.name,
-      Date.now(),
-      id
-    );
-    if (result.changes === 0) {
-      throw new FolderNotFoundError();
+    try {
+      const result = await database.runAsync(
+        "UPDATE folders SET name = ?, updated_at = ? WHERE id = ?",
+        validation.name,
+        Date.now(),
+        id
+      );
+      if (result.changes === 0) {
+        throw new FolderNotFoundError();
+      }
+    } catch (error) {
+      if (error instanceof FolderNotFoundError) {
+        throw error;
+      }
+      throw mapFolderWriteError(error);
     }
-  } catch (error) {
-    if (error instanceof FolderNotFoundError) {
-      throw error;
-    }
-    throw mapFolderWriteError(error);
-  }
+  });
 }
 
 export async function deleteFolder(
   id: string,
   strategy: FolderDeleteStrategy
 ): Promise<void> {
-  if (await isVaultFolder(id)) {
-    await deleteVaultFolder(id, strategy);
-    return;
-  }
-
-  const database = await getDatabase();
-  const previewPaths =
-    strategy === "deleteBookmarks"
-      ? await database.getAllAsync<{ previewImagePath: string | null }>(
-          `SELECT preview_image_path AS previewImagePath
-           FROM bookmarks
-           WHERE folder_id = ? AND preview_image_path IS NOT NULL`,
-          id
-        )
-      : [];
-
-  await database.withTransactionAsync(async () => {
-    if (strategy === "deleteBookmarks") {
-      await database.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
-    } else {
-      await database.runAsync(
-        "UPDATE bookmarks SET folder_id = NULL, updated_at = ? WHERE folder_id = ?",
-        Date.now(),
-        id
-      );
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(id)) {
+      await deleteVaultFolder(id, strategy);
+      return;
     }
 
-    const result = await database.runAsync("DELETE FROM folders WHERE id = ?", id);
-    if (result.changes === 0) {
-      throw new FolderNotFoundError();
+    const database = await getDatabase();
+    const previewPaths =
+      strategy === "deleteBookmarks"
+        ? await database.getAllAsync<{ previewImagePath: string | null }>(
+            `SELECT preview_image_path AS previewImagePath
+             FROM bookmarks
+             WHERE folder_id = ? AND preview_image_path IS NOT NULL`,
+            id
+          )
+        : [];
+
+    await database.withTransactionAsync(async () => {
+      if (strategy === "deleteBookmarks") {
+        await database.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
+      } else {
+        await database.runAsync(
+          "UPDATE bookmarks SET folder_id = NULL, updated_at = ? WHERE folder_id = ?",
+          Date.now(),
+          id
+        );
+      }
+
+      const result = await database.runAsync("DELETE FROM folders WHERE id = ?", id);
+      if (result.changes === 0) {
+        throw new FolderNotFoundError();
+      }
+    });
+
+    for (const row of previewPaths) {
+      if (row.previewImagePath) {
+        deletePreviewImage(row.previewImagePath);
+      }
     }
   });
-
-  for (const row of previewPaths) {
-    if (row.previewImagePath) {
-      deletePreviewImage(row.previewImagePath);
-    }
-  }
 }
 
 /**

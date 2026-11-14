@@ -4,7 +4,6 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 
-import { isVaultBookmark } from "@/core/database/privateVaultRepository";
 import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
@@ -32,34 +31,20 @@ export function BookmarkDetailsScreen({
 }: BookmarkDetailsScreenProps) {
   const { theme } = useTheme();
   const router = useRouter();
-  const { bookmark, status, errorMessage, reload } =
+  const { bookmark, isPrivate, status, errorMessage, reload } =
     useBookmarkDetails(bookmarkId);
   const audioInset = useReaderAudioInset();
   const [actionsVisible, setActionsVisible] = useState(false);
   const { isUnlocked } = usePrivateSpaceSession();
-  const [privateBookmark, setPrivateBookmark] = useState(false);
 
   useEffect(() => {
-    let active = true;
-    if (bookmark && isUnlocked) {
-      void isVaultBookmark(bookmark.id).then((isPrivate) => {
-        if (active) {
-          setPrivateBookmark(isPrivate);
-        }
-      });
-    }
-    return () => {
-      active = false;
-    };
-  }, [bookmark, isUnlocked]);
-
-  useEffect(() => {
-    if (privateBookmark && !isUnlocked) {
+    if (isPrivate && !isUnlocked) {
       setActionsVisible(false);
       router.back();
     }
-  }, [isUnlocked, privateBookmark, router]);
+  }, [isPrivate, isUnlocked, router]);
 
+  const privateLocked = isPrivate && !isUnlocked;
   const previewUri = bookmark?.previewImagePath
     ? resolvePreviewImageUri(bookmark.previewImagePath)
     : null;
@@ -71,7 +56,7 @@ export function BookmarkDetailsScreen({
         icon="link-variant"
         onBack={() => router.back()}
         actions={
-          bookmark ? (
+          bookmark && !privateLocked ? (
             <IconButton
               icon="dots-vertical"
               label="Link actions"
@@ -81,7 +66,9 @@ export function BookmarkDetailsScreen({
         }
       />
 
-      {status === "loading" ? (
+      {privateLocked ? (
+        <LoadingState message="Locking private content…" />
+      ) : status === "loading" ? (
         <LoadingState message="Opening saved link…" />
       ) : status === "not_found" ? (
         <ErrorState message="This saved link may have been deleted." />

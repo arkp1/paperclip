@@ -131,7 +131,8 @@ async function readPreviewDataUri(
 
 async function writePreviewDataUri(
   bookmarkId: string,
-  dataUri: string | null
+  dataUri: string | null,
+  onCreated?: (relativePath: string) => void
 ): Promise<string | null> {
   if (!dataUri) {
     return null;
@@ -147,6 +148,8 @@ async function writePreviewDataUri(
   try {
     const file = new File(directory, relativePath);
     file.create({ intermediates: true, overwrite: true });
+    // Track the file before writing so a partial write can be rolled back.
+    onCreated?.(relativePath);
     await file.write(base64ToBytes(match[2] ?? ""));
     return relativePath;
   } catch (error) {
@@ -381,11 +384,13 @@ async function copyVaultBookmarkToPublic(
   vault: Awaited<ReturnType<typeof getPrivateVault>>,
   main: Awaited<ReturnType<typeof getDatabase>>,
   bookmark: VaultBookmarkRow,
-  targetFolderId: string | null
-): Promise<string | null> {
+  targetFolderId: string | null,
+  restoredPreviewFiles: string[]
+): Promise<void> {
   const previewImagePath = await writePreviewDataUri(
     bookmark.id,
-    bookmark.previewDataUri
+    bookmark.previewDataUri,
+    (relativePath) => restoredPreviewFiles.push(relativePath)
   );
   await main.runAsync(
     `INSERT INTO bookmarks
@@ -459,7 +464,6 @@ async function copyVaultBookmarkToPublic(
       );
     }
   }
-  return previewImagePath;
 }
 
 export async function moveVaultFolderToPublicSafe(
@@ -513,15 +517,13 @@ export async function moveVaultFolderToPublicSafe(
         folder.updatedAt
       );
       for (const bookmark of bookmarks) {
-        const restored = await copyVaultBookmarkToPublic(
+        await copyVaultBookmarkToPublic(
           vault,
           main,
           bookmark,
-          folderId
+          folderId,
+          restoredPreviewFiles
         );
-        if (restored) {
-          restoredPreviewFiles.push(restored);
-        }
       }
     });
   } catch (error) {
@@ -634,19 +636,20 @@ export async function moveVaultBookmarkToPublicSafe(
       throw new FolderNotFoundError();
     }
   }
-  let restoredPreviewFile: string | null = null;
+  const restoredPreviewFiles: string[] = [];
   try {
     await main.withTransactionAsync(async () => {
-      restoredPreviewFile = await copyVaultBookmarkToPublic(
+      await copyVaultBookmarkToPublic(
         vault,
         main,
         bookmark,
-        folderId
+        folderId,
+        restoredPreviewFiles
       );
     });
   } catch (error) {
-    if (restoredPreviewFile) {
-      deletePreviewImage(restoredPreviewFile);
+    for (const path of restoredPreviewFiles) {
+      deletePreviewImage(path);
     }
     throw error;
   }

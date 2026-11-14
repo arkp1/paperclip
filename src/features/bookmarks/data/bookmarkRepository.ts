@@ -322,21 +322,23 @@ export async function setBookmarkFavorite(
   id: string,
   isFavorite: boolean
 ): Promise<void> {
-  if (await isVaultBookmark(id)) {
-    await updateVaultBookmarkFavorite(id, isFavorite);
-    return;
-  }
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
-    isFavorite ? 1 : 0,
-    Date.now(),
-    id
-  );
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultBookmark(id)) {
+      await updateVaultBookmarkFavorite(id, isFavorite);
+      return;
+    }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
+      isFavorite ? 1 : 0,
+      Date.now(),
+      id
+    );
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
 export async function updateBookmarkContent(
@@ -348,57 +350,76 @@ export async function updateBookmarkContent(
     throw new Error("A bookmark needs a title.");
   }
 
-  if (await isVaultBookmark(id)) {
-    await updateVaultBookmarkContent(id, { title, note: input.note });
-    return;
-  }
-
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    `UPDATE bookmarks
-     SET title = ?, title_is_user_edited = 1, note = ?, updated_at = ?
-     WHERE id = ?`,
-    title,
-    input.note,
-    Date.now(),
-    id
-  );
-
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
-}
-
-export async function moveBookmark(id: string, folderId: string | null): Promise<void> {
-  if (await isVaultBookmark(id)) {
-    if (folderId && (await isVaultFolder(folderId))) {
-      await moveVaultBookmark(id, folderId);
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultBookmark(id)) {
+      await updateVaultBookmarkContent(id, { title, note: input.note });
       return;
     }
-    await withPrivacyWriteLock(() =>
-      moveVaultBookmarkToPublic(id, folderId)
+
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      `UPDATE bookmarks
+       SET title = ?, title_is_user_edited = 1, note = ?, updated_at = ?
+       WHERE id = ?`,
+      title,
+      input.note,
+      Date.now(),
+      id
     );
-    return;
-  }
 
-  if (folderId && (await isVaultFolder(folderId))) {
-    await withPrivacyWriteLock(() =>
-      movePublicBookmarkToVault(id, folderId)
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
+}
+
+export async function moveBookmark(
+  id: string,
+  folderId: string | null
+): Promise<void> {
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultBookmark(id)) {
+      const database = await getDatabase();
+      const publicSource = await database.getFirstAsync<{ id: string }>(
+        "SELECT id FROM bookmarks WHERE id = ?",
+        id
+      );
+      const targetIsVault = Boolean(folderId && (await isVaultFolder(folderId)));
+
+      if (publicSource) {
+        if (targetIsVault && folderId) {
+          await movePublicBookmarkToVault(id, folderId);
+        } else {
+          await moveVaultBookmarkToPublic(id, folderId);
+        }
+        return;
+      }
+
+      if (targetIsVault && folderId) {
+        await moveVaultBookmark(id, folderId);
+        return;
+      }
+      await moveVaultBookmarkToPublic(id, folderId);
+      return;
+    }
+
+    if (folderId && (await isVaultFolder(folderId))) {
+      await movePublicBookmarkToVault(id, folderId);
+      return;
+    }
+
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE bookmarks SET folder_id = ?, updated_at = ? WHERE id = ?",
+      folderId,
+      Date.now(),
+      id
     );
-    return;
-  }
 
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE bookmarks SET folder_id = ?, updated_at = ? WHERE id = ?",
-    folderId,
-    Date.now(),
-    id
-  );
-
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
 export async function updateBookmarkPreviewAsset(
@@ -479,16 +500,21 @@ export async function updateBookmarkMetadata(
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
-  if (await isVaultBookmark(id)) {
-    await deleteVaultBookmark(id);
-    return;
-  }
-  const database = await getDatabase();
-  const result = await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultBookmark(id)) {
+      await deleteVaultBookmark(id);
+      return;
+    }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "DELETE FROM bookmarks WHERE id = ?",
+      id
+    );
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
 export async function searchPublicBookmarks(  rawQuery: string,

@@ -1,4 +1,10 @@
-import { Modal, useWindowDimensions, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { Image } from "expo-image";
 import {
   Gesture,
@@ -14,6 +20,8 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IconButton } from "@/shared/ui/IconButton";
+import { AppText } from "@/shared/ui/AppText";
+import { Button } from "@/shared/ui/Button";
 import { styles } from "@/styles/features/reader/ReaderImageViewer.styles";
 
 type ReaderImageViewerProps = {
@@ -35,8 +43,17 @@ export function ReaderImageViewer({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
+  const [loading, setLoading] = useState(Boolean(source));
+  const [failed, setFailed] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
   const scale = useSharedValue(1);
   const startScale = useSharedValue(1);
+
+  useEffect(() => {
+    setLoading(Boolean(source));
+    setFailed(false);
+    setRetryToken((token) => token + 1);
+  }, [source, visible]);
 
   const pinch = Gesture.Pinch()
     .onBegin(() => {
@@ -71,12 +88,46 @@ export function ReaderImageViewer({
           >
             {source ? (
               <Image
+                key={`${source}-${retryToken}`}
                 source={{ uri: source }}
-                style={styles.image}
+                style={[styles.image, failed ? styles.imageHidden : null]}
                 contentFit="contain"
                 cachePolicy="memory"
                 accessibilityLabel={alt}
+                onLoadStart={() => {
+                  setLoading(true);
+                  setFailed(false);
+                }}
+                onLoad={() => {
+                  setLoading(false);
+                  setFailed(false);
+                }}
+                onError={() => {
+                  setLoading(false);
+                  setFailed(true);
+                }}
               />
+            ) : null}
+            {loading && !failed ? (
+              <View style={styles.overlay}>
+                <ActivityIndicator color="#FFFFFF" />
+              </View>
+            ) : null}
+            {failed ? (
+              <View style={styles.overlay}>
+                <AppText variant="bodyMedium" style={styles.errorText}>
+                  This image could not be loaded.
+                </AppText>
+                <Button
+                  label="Retry"
+                  variant="tonal"
+                  onPress={() => {
+                    setLoading(true);
+                    setFailed(false);
+                    setRetryToken((token) => token + 1);
+                  }}
+                />
+              </View>
             ) : null}
           </Animated.View>
         </GestureDetector>

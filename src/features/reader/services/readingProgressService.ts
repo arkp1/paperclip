@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
 import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import {
   getVaultSetting,
   setVaultSetting,
@@ -75,17 +76,19 @@ export async function saveReadingProgress(
   bookmarkId: string,
   progress: ReadingProgress
 ): Promise<void> {
-  const privacy = await getBookmarkPrivacy(bookmarkId);
-  if (privacy === "unavailable") {
-    throw new Error("The private vault is locked. Reading progress was not saved.");
-  }
-  const serialized = JSON.stringify({
-    ...progress,
-    updatedAt: Date.now(),
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked. Reading progress was not saved.");
+    }
+    const serialized = JSON.stringify({
+      ...progress,
+      updatedAt: Date.now(),
+    });
+    if (privacy === "private") {
+      await setVaultSetting(keyFor(bookmarkId), serialized);
+      return;
+    }
+    await setSetting(keyFor(bookmarkId), serialized);
   });
-  if (privacy === "private") {
-    await setVaultSetting(keyFor(bookmarkId), serialized);
-    return;
-  }
-  await setSetting(keyFor(bookmarkId), serialized);
 }

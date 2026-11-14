@@ -44,6 +44,7 @@ import type { ArticleBlock } from "@/features/reader/services/articleService";
 import {
   annotationTints,
   blockAnnotationKey,
+  contentAnnotationKey,
   loadAnnotations,
   saveAnnotations,
   type HighlightColor,
@@ -110,6 +111,10 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const [searchCursor, setSearchCursor] = useState(0);
   const [annotateMode, setAnnotateMode] = useState(false);
   const [annotations, setAnnotations] = useState<ReaderAnnotation[]>([]);
+  const [annotationsStatus, setAnnotationsStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [annotationsReloadToken, setAnnotationsReloadToken] = useState(0);
   const [annotationKey, setAnnotationKey] = useState<string | null>(null);
   const [annotationVisible, setAnnotationVisible] = useState(false);
   const [viewerImage, setViewerImage] = useState<{
@@ -230,24 +235,35 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
 
   useEffect(() => {
     let active = true;
+    setAnnotationsStatus("loading");
     void loadAnnotations(bookmarkId)
       .then((next) => {
         if (active) {
           setAnnotations(next);
+          setAnnotationsStatus("ready");
         }
       })
       .catch((error: unknown) => {
+        if (active) {
+          setAnnotationsStatus("error");
+        }
         console.warn("Could not load reader annotations.", error);
       });
     return () => {
       active = false;
     };
-  }, [bookmarkId]);
+  }, [bookmarkId, annotationsReloadToken]);
 
   useEffect(() => {
     setSearchCursor(0);
   }, [searchQuery]);
   useEffect(() => {
+    if (latestProgress.current) {
+      savedProgressRef.current = {
+        ...latestProgress.current,
+        updatedAt: Date.now(),
+      };
+    }
     restoredRef.current = false;
     setPageIndex(0);
   }, [
@@ -472,15 +488,33 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     }
   };
 
-  const jumpToBlock = (blockIndex: number, blockKey: string) => {
+  const jumpToBlock = (
+    blockIndex: number,
+    blockKey: string,
+    query = ""
+  ) => {
     if (preferences.paginate && pages.length > 0) {
-      const page = pages.findIndex((candidate) =>
+      const normalizedQuery = query.trim().toLowerCase();
+      const pageByKey = pages.findIndex((candidate) =>
         candidate.blocks.some(
           (block) =>
             block.type !== "image" &&
             (block.sourceKey ?? blockAnnotationKey(block)) === blockKey
         )
       );
+      const pageByMatch =
+        normalizedQuery.length > 0
+          ? pages.findIndex((candidate) =>
+              candidate.blocks.some(
+                (block) =>
+                  block.type !== "image" &&
+                  (block.sourceKey ?? blockAnnotationKey(block)) ===
+                    blockKey &&
+                  block.text.toLowerCase().includes(normalizedQuery)
+              )
+            )
+          : -1;
+      const page = pageByMatch >= 0 ? pageByMatch : pageByKey;
       if (page >= 0) {
         setPageIndex(page);
         pagesRef.current?.scrollToIndex({ index: page, animated: true });
@@ -509,7 +543,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     setSearchCursor(next);
     const match = searchMatches[next];
     if (match) {
-      jumpToBlock(match.index, match.key);
+      jumpToBlock(match.index, match.key, searchQuery);
     }
   };
 
@@ -520,13 +554,39 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     setSearchCursor(0);
     const match = searchMatches[0];
     if (match) {
-      jumpToBlock(match.index, match.key);
+      jumpToBlock(match.index, match.key, searchQuery);
     }
     // Jump as the query changes; arrow navigation is handled separately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchVisible]);
 
+  const showAnnotationsUnavailable = () => {
+    Alert.alert(
+      "Highlights unavailable",
+      "Your saved highlights could not be loaded. Editing is blocked so the existing data is not overwritten.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Retry",
+          onPress: () => setAnnotationsReloadToken((token) => token + 1),
+        },
+      ]
+    );
+  };
+
+  const beginAnnotate = () => {
+    if (annotationsStatus !== "ready") {
+      showAnnotationsUnavailable();
+      return;
+    }
+    setAnnotateMode(true);
+  };
+
   const openAnnotationFor = (key: string) => {
+    if (annotationsStatus !== "ready") {
+      showAnnotationsUnavailable();
+      return;
+    }
     setAnnotationKey(key);
     setAnnotationVisible(true);
     setAnnotateMode(false);
@@ -534,6 +594,10 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
 
   const saveAnnotation = async (color: HighlightColor, note: string) => {
     if (!annotationKey) {
+      return;
+    }
+    if (annotationsStatus !== "ready") {
+      showAnnotationsUnavailable();
       return;
     }
     const next = annotations.filter(
@@ -561,6 +625,10 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
 
   const removeAnnotation = async () => {
     if (!annotationKey) {
+      return;
+    }
+    if (annotationsStatus !== "ready") {
+      showAnnotationsUnavailable();
       return;
     }
     const next = annotations.filter(
@@ -602,6 +670,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       setViewerImage(null);
       setAnnotationVisible(false);
       setAnnotationKey(null);
+      setAnnotateMode(false);
       clearAudio();
       if (bookmarkIsPrivate) {
         router.back();
@@ -722,7 +791,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           );
         }
 
-        const contentKey = blockAnnotationKey(block);
+        const contentKey = contentAnnotationKey(block);
         const blockKey = block.sourceKey ?? contentKey;
         const annotation =
           annotationMap.get(blockKey) ?? annotationMap.get(contentKey);
@@ -1033,7 +1102,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         }}
         onSearch={() => setSearchVisible(true)}
         onAnnotate={() => {
-          setAnnotateMode(true);
+          beginAnnotate();
         }}
         onToggleCompleted={toggleCompleted}
         onJumpToTop={jumpToTop}

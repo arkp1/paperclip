@@ -405,11 +405,19 @@ export async function getBookmarkPrivacy(
     }
   }
   const main = await getDatabase();
-  const publicRow = await main.getFirstAsync<{ id: string }>(
-    "SELECT id FROM bookmarks WHERE id = ?",
+  const publicRow = await main.getFirstAsync<{ isPrivate: number }>(
+    `SELECT COALESCE(f.is_private, 0) AS isPrivate
+     FROM bookmarks b
+     LEFT JOIN folders f ON f.id = b.folder_id
+     WHERE b.id = ?`,
     id
   );
-  return publicRow ? "public" : "unavailable";
+  if (!publicRow) {
+    return "unavailable";
+  }
+  // A legacy private row still in the public DB is not a safe public result;
+  // it must be migrated into the vault after authentication.
+  return publicRow.isPrivate === 1 ? "unavailable" : "public";
 }
 
 export async function moveVaultFolderToPublic(folderId: string): Promise<void> {

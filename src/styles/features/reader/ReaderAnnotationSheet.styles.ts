@@ -11,9 +11,9 @@ export const styles = StyleSheet.create({
     gap: spacing[2],
   },
   swatch: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",

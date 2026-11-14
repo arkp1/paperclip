@@ -1,12 +1,14 @@
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
-import { getBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
+import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
+import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { getFolderById } from "@/features/folders/data/folderRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
 
 type BookmarkDetailsState = {
   bookmark: BookmarkView | null;
+  isPrivate: boolean;
   status: "loading" | "ready" | "not_found" | "error";
   errorMessage: string | null;
 };
@@ -14,38 +16,80 @@ type BookmarkDetailsState = {
 export function useBookmarkDetails(bookmarkId: string) {
   const [state, setState] = useState<BookmarkDetailsState>({
     bookmark: null,
+    isPrivate: false,
     status: "loading",
     errorMessage: null,
   });
 
-  const load = useCallback(async () => {
-    try {
-      const bookmark = await getBookmarkById(bookmarkId);
-      const folder = bookmark?.folderId
-        ? await getFolderById(bookmark.folderId)
-        : null;
-      setState({
-        bookmark: bookmark
-          ? { ...bookmark, folderName: folder?.name ?? null }
-          : null,
-        status: bookmark ? "ready" : "not_found",
-        errorMessage: null,
-      });
-    } catch (error) {
-      console.warn("Could not load this bookmark.", error);
-      setState({
-        bookmark: null,
-        status: "error",
-        errorMessage: "Could not open this saved link.",
-      });
-    }
-  }, [bookmarkId]);
+  const load = useCallback(
+    async (isActive: () => boolean = () => true) => {
+      try {
+        const bookmark = await getReadableBookmarkById(bookmarkId);
+        if (!isActive()) {
+          return;
+        }
+        if (!bookmark) {
+          setState({
+            bookmark: null,
+            isPrivate: false,
+            status: "not_found",
+            errorMessage: null,
+          });
+          return;
+        }
+
+        const [folder, privacy] = await Promise.all([
+          bookmark.folderId ? getFolderById(bookmark.folderId) : null,
+          getBookmarkPrivacy(bookmarkId),
+        ]);
+        if (!isActive()) {
+          return;
+        }
+        if (privacy === "unavailable" && bookmark.folderId) {
+          setState({
+            bookmark: null,
+            isPrivate: true,
+            status: "not_found",
+            errorMessage: null,
+          });
+          return;
+        }
+        setState({
+          bookmark: { ...bookmark, folderName: folder?.name ?? null },
+          isPrivate: privacy === "private",
+          status: "ready",
+          errorMessage: null,
+        });
+      } catch (error) {
+        if (!isActive()) {
+          return;
+        }
+        console.warn("Could not load this bookmark.", error);
+        setState({
+          bookmark: null,
+          isPrivate: false,
+          status: "error",
+          errorMessage: "Could not open this saved link.",
+        });
+      }
+    },
+    [bookmarkId]
+  );
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      let active = true;
+      void load(() => active);
+      return () => {
+        active = false;
+      };
     }, [load])
   );
 
-  return { ...state, reload: load };
+  const reload = useCallback(() => load(), [load]);
+
+  return {
+    ...state,
+    reload,
+  };
 }

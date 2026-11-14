@@ -51,7 +51,10 @@ export async function enrichBookmarkPreview(
     });
   } catch (error) {
     console.warn("Could not cache the preview image.", error);
-    if ((await getBookmarkPrivacy(bookmarkId)) === "public") {
+    await withPrivacyWriteLock(async () => {
+      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+        return;
+      }
       await updateBookmarkPreviewAsset(bookmarkId, {
         previewImagePath: null,
         previewStatus: "partial",
@@ -59,7 +62,7 @@ export async function enrichBookmarkPreview(
       }).catch(() => {
         // The bookmark remains saved with its fallback card.
       });
-    }
+    });
   }
 }
 
