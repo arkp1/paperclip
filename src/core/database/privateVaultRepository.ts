@@ -19,8 +19,13 @@ import type {
   PreviewStatus,
 } from "@/features/bookmarks/types";
 import { isFolderColorKey, type FolderColorKey } from "@/theme/colors";
-import { Paths, File } from "expo-file-system";
-import { Image } from "expo-image";
+import {
+  deleteVaultFolderSafe,
+  movePublicBookmarkToVaultSafe,
+  movePublicFolderToVaultSafe,
+  moveVaultBookmarkToPublicSafe,
+  moveVaultFolderToPublicSafe,
+} from "@/core/database/vaultTransfers";
 
 type FolderRow = {
   id: string;
@@ -236,14 +241,9 @@ export async function markVaultFolderOpened(
 
 export async function deleteVaultFolder(
   id: string,
-  _strategy: FolderDeleteStrategy
+  strategy: FolderDeleteStrategy
 ): Promise<void> {
-  const database = await getPrivateVault();
-  await database.withTransactionAsync(async () => {
-    // Private contents must never be moved into public Uncategorized.
-    await database.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
-    await database.runAsync("DELETE FROM folders WHERE id = ?", id);
-  });
+  return deleteVaultFolderSafe(id, strategy);
 }
 
 export async function listVaultBookmarksInFolder(
@@ -262,7 +262,7 @@ export async function listVaultBookmarksInFolder(
        b.id, b.original_url AS originalUrl, b.canonical_url AS canonicalUrl,
        b.title, b.title_is_user_edited AS titleIsUserEdited, b.description,
        b.note, b.folder_id AS folderId, b.source_name AS sourceName,
-       b.domain, NULL AS previewImagePath, NULL AS faviconPath,
+       b.domain, b.preview_data_uri AS previewImagePath, NULL AS faviconPath,
        b.preview_status AS previewStatus, b.is_favorite AS isFavorite,
        b.created_at AS createdAt, b.updated_at AS updatedAt
      FROM bookmarks b
@@ -285,7 +285,7 @@ export async function getVaultBookmarkById(
        b.id, b.original_url AS originalUrl, b.canonical_url AS canonicalUrl,
        b.title, b.title_is_user_edited AS titleIsUserEdited, b.description,
        b.note, b.folder_id AS folderId, b.source_name AS sourceName,
-       b.domain, NULL AS previewImagePath, NULL AS faviconPath,
+       b.domain, b.preview_data_uri AS previewImagePath, NULL AS faviconPath,
        b.preview_status AS previewStatus, b.is_favorite AS isFavorite,
        b.created_at AS createdAt, b.updated_at AS updatedAt
      FROM bookmarks b WHERE b.id = ?`,
@@ -384,74 +384,36 @@ export async function isVaultBookmark(id: string): Promise<boolean> {
   return Boolean(row);
 }
 
-export async function moveVaultFolderToPublic(folderId: string): Promise<void> {
-  const vault = await getPrivateVault();
-  const folder = await vault.getFirstAsync<FolderRow>(
-    `SELECT id, name, icon_key AS iconKey, color_key AS colorKey,
-            sort_order AS sortOrder, last_opened_at AS lastOpenedAt,
-            created_at AS createdAt, updated_at AS updatedAt,
-            NULL AS bookmarkCount
-     FROM folders WHERE id = ?`,
-    folderId
-  );
-  if (!folder) {
-    throw new FolderNotFoundError();
-  }
-  const bookmarks = await vault.getAllAsync<BookmarkRow>(
-    `SELECT id, original_url AS originalUrl, canonical_url AS canonicalUrl,
-            title, title_is_user_edited AS titleIsUserEdited, description,
-            note, folder_id AS folderId, source_name AS sourceName, domain,
-            preview_status AS previewStatus, is_favorite AS isFavorite,
-            created_at AS createdAt, updated_at AS updatedAt,
-            NULL AS previewImagePath, NULL AS faviconPath
-     FROM bookmarks WHERE folder_id = ?`,
-    folderId
-  );
-  const main = await getDatabase();
+export type BookmarkPrivacy = "private" | "public" | "unavailable";
 
-  await main.withTransactionAsync(async () => {
-    await main.runAsync(
-      `INSERT INTO folders
-       (id, name, icon_key, color_key, is_private, sort_order, last_opened_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-      folder.id,
-      folder.name,
-      folder.iconKey,
-      folder.colorKey,
-      folder.sortOrder,
-      folder.lastOpenedAt,
-      folder.createdAt,
-      folder.updatedAt
+/**
+ * Classifies a bookmark without treating a closed vault as public membership.
+ * A locked vault returns "unavailable" for private records so callers fail
+ * closed instead of writing sensitive settings to the public database.
+ */
+export async function getBookmarkPrivacy(
+  id: string
+): Promise<BookmarkPrivacy> {
+  if (isPrivateVaultOpen()) {
+    const privateDatabase = await getPrivateVault();
+    const privateRow = await privateDatabase.getFirstAsync<{ id: string }>(
+      "SELECT id FROM bookmarks WHERE id = ?",
+      id
     );
-    for (const bookmark of bookmarks) {
-      await main.runAsync(
-        `INSERT INTO bookmarks
-         (id, original_url, canonical_url, title, title_is_user_edited,
-          description, note, folder_id, source_name, domain, preview_image_path,
-          favicon_path, preview_status, is_favorite, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
-        bookmark.id,
-        bookmark.originalUrl,
-        bookmark.canonicalUrl,
-        bookmark.title,
-        bookmark.titleIsUserEdited,
-        bookmark.description,
-        bookmark.note,
-        folderId,
-        bookmark.sourceName,
-        bookmark.domain,
-        bookmark.previewStatus,
-        bookmark.isFavorite,
-        bookmark.createdAt,
-        bookmark.updatedAt
-      );
+    if (privateRow) {
+      return "private";
     }
-  });
+  }
+  const main = await getDatabase();
+  const publicRow = await main.getFirstAsync<{ id: string }>(
+    "SELECT id FROM bookmarks WHERE id = ?",
+    id
+  );
+  return publicRow ? "public" : "unavailable";
+}
 
-  await vault.withTransactionAsync(async () => {
-    await vault.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", folderId);
-    await vault.runAsync("DELETE FROM folders WHERE id = ?", folderId);
-  });
+export async function moveVaultFolderToPublic(folderId: string): Promise<void> {
+  return moveVaultFolderToPublicSafe(folderId);
 }
 
 export async function moveVaultArticleToPublic(
@@ -498,52 +460,14 @@ export async function moveVaultBookmarkToPublic(
   id: string,
   folderId: string | null
 ): Promise<void> {
-  const vault = await getPrivateVault();
-  const bookmark = await vault.getFirstAsync<BookmarkRow>(
-    `SELECT id, original_url AS originalUrl, canonical_url AS canonicalUrl,
-            title, title_is_user_edited AS titleIsUserEdited, description,
-            note, folder_id AS folderId, source_name AS sourceName, domain,
-            preview_status AS previewStatus, is_favorite AS isFavorite,
-            created_at AS createdAt, updated_at AS updatedAt,
-            NULL AS previewImagePath, NULL AS faviconPath
-     FROM bookmarks WHERE id = ?`,
-    id
-  );
-  if (!bookmark) {
-    throw new Error("Private bookmark not found.");
-  }
-  const main = await getDatabase();
-  if (folderId) {
-    const folder = await main.getFirstAsync<{ id: string }>(
-      "SELECT id FROM folders WHERE id = ? AND is_private = 0",
-      folderId
-    );
-    if (!folder) {
-      throw new FolderNotFoundError();
-    }
-  }
-  await main.runAsync(
-    `INSERT INTO bookmarks
-     (id, original_url, canonical_url, title, title_is_user_edited, description,
-      note, folder_id, source_name, domain, preview_image_path, favicon_path,
-      preview_status, is_favorite, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)`,
-    bookmark.id,
-    bookmark.originalUrl,
-    bookmark.canonicalUrl,
-    bookmark.title,
-    bookmark.titleIsUserEdited,
-    bookmark.description,
-    bookmark.note,
-    folderId,
-    bookmark.sourceName,
-    bookmark.domain,
-    bookmark.previewStatus,
-    bookmark.isFavorite,
-    bookmark.createdAt,
-    bookmark.updatedAt
-  );
-  await vault.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+  return moveVaultBookmarkToPublicSafe(id, folderId);
+}
+
+export async function movePublicBookmarkToVault(
+  id: string,
+  folderId: string
+): Promise<void> {
+  return movePublicBookmarkToVaultSafe(id, folderId);
 }
 
 export async function getVaultArticle(
@@ -594,107 +518,5 @@ export async function saveVaultArticle(
  * plaintext private assets.
  */
 export async function movePublicFolderToVault(folderId: string): Promise<void> {
-  const main = await getDatabase();
-  const folder = await main.getFirstAsync<FolderRow>(
-    `SELECT id, name, icon_key AS iconKey, color_key AS colorKey,
-            sort_order AS sortOrder, last_opened_at AS lastOpenedAt,
-            created_at AS createdAt, updated_at AS updatedAt,
-            NULL AS bookmarkCount
-     FROM folders WHERE id = ?`,
-    folderId
-  );
-  if (!folder) {
-    throw new FolderNotFoundError();
-  }
-  const bookmarks = await main.getAllAsync<BookmarkRow>(
-    `SELECT id, original_url AS originalUrl, canonical_url AS canonicalUrl,
-            title, title_is_user_edited AS titleIsUserEdited, description,
-            note, folder_id AS folderId, source_name AS sourceName, domain,
-            preview_image_path AS previewImagePath, favicon_path AS faviconPath,
-            preview_status AS previewStatus, is_favorite AS isFavorite,
-            created_at AS createdAt, updated_at AS updatedAt
-     FROM bookmarks WHERE folder_id = ?`,
-    folderId
-  );
-  const vault = await getPrivateVault();
-
-  await main.runAsync(
-    "UPDATE folders SET is_private = 1, updated_at = ? WHERE id = ?",
-    Date.now(),
-    folderId
-  );
-
-  try {
-    await vault.withTransactionAsync(async () => {
-      await vault.runAsync(
-        `INSERT INTO folders
-         (id, name, icon_key, color_key, sort_order, last_opened_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        folder.id,
-        folder.name,
-        folder.iconKey,
-        folder.colorKey,
-        folder.sortOrder,
-        folder.lastOpenedAt,
-        folder.createdAt,
-        folder.updatedAt
-      );
-      for (const bookmark of bookmarks) {
-        await vault.runAsync(
-          `INSERT INTO bookmarks
-           (id, original_url, canonical_url, title, title_is_user_edited,
-            description, note, folder_id, source_name, domain, favicon_path,
-            preview_status, is_favorite, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          bookmark.id,
-          bookmark.originalUrl,
-          bookmark.canonicalUrl,
-          bookmark.title,
-          bookmark.titleIsUserEdited,
-          bookmark.description,
-          bookmark.note,
-          folderId,
-          bookmark.sourceName,
-          bookmark.domain,
-          null,
-          bookmark.previewStatus,
-          bookmark.isFavorite,
-          bookmark.createdAt,
-          bookmark.updatedAt
-        );
-      }
-    });
-  } catch (error) {
-    await main.runAsync(
-      "UPDATE folders SET is_private = 0, updated_at = ? WHERE id = ?",
-      Date.now(),
-      folderId
-    );
-    throw error;
-  }
-
-  for (const bookmark of bookmarks) {
-    if (bookmark.previewImagePath) {
-      try {
-        const file = new File(Paths.document, bookmark.previewImagePath);
-        if (file.exists) {
-          file.delete();
-        }
-      } catch {
-        // Best-effort plaintext asset removal.
-      }
-    }
-    await main
-      .runAsync(
-        "DELETE FROM app_settings WHERE key IN (?, ?)",
-        `reader_progress:${bookmark.id}`,
-        `reader_annotations:${bookmark.id}`
-      )
-      .catch(() => undefined);
-  }
-
-  await main.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", folderId);
-  await main.runAsync("DELETE FROM folders WHERE id = ?", folderId);
-  await Image.clearDiskCache().catch(() => undefined);
-  await Image.clearMemoryCache().catch(() => undefined);
+  return movePublicFolderToVaultSafe(folderId);
 }

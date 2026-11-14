@@ -3,7 +3,7 @@ import { semantics } from "@expo/ui/jetpack-compose/modifiers";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { Alert, Platform, ScrollView, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { AppText } from "@/shared/ui/AppText";
+import { Button } from "@/shared/ui/Button";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
 import { MaterialHost } from "@/shared/ui/MaterialHost";
@@ -21,6 +22,8 @@ import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { styles } from "@/styles/features/settings/SettingsScreen.styles";
 import { accentOptions, accentSwatch, useTheme } from "@/theme";
 import type { ThemeMode } from "@/theme/ThemeProvider";
+import { resetPrivateVault } from "@/core/database/privateVault";
+import { lockPrivateSpace } from "@/core/security/privateSpaceSession";
 
 const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
   { label: "System", mode: "system" },
@@ -302,7 +305,7 @@ export function SettingsScreen() {
             <InfoRow
               icon="shield-lock-outline"
               title="Locked folders"
-              description="Lock folders from their menu. Unlocking uses biometrics or your device PIN; database encryption is not enabled in this build."
+              description="Lock folders from their menu. Private data is stored in a SQLCipher vault unlocked with biometrics or your device PIN."
             />
             <InfoRow
               icon="lock-outline"
@@ -310,6 +313,39 @@ export function SettingsScreen() {
               description="Unlocked folders lock again when Paperclip leaves the foreground."
             />
           </View>
+          <Button
+            label="Reset private vault"
+            variant="text"
+            onPress={() => {
+              Alert.alert(
+                "Reset private vault?",
+                "This permanently deletes every private folder, saved link, article, annotation, and preview. Public data is not affected.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Reset vault",
+                    style: "destructive",
+                    onPress: () => {
+                      lockPrivateSpace();
+                      void resetPrivateVault()
+                        .then(() =>
+                          Alert.alert(
+                            "Private vault reset",
+                            "The encrypted private vault was removed."
+                          )
+                        )
+                        .catch(() =>
+                          Alert.alert(
+                            "Reset failed",
+                            "The private vault could not be removed. No public data was changed."
+                          )
+                        );
+                    },
+                  },
+                ]
+              );
+            }}
+          />
         </View>
 
         <View style={styles.section}>

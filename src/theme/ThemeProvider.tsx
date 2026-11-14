@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -56,6 +57,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [amoled, setAmoledState] = useState(false);
   const [dynamic, setDynamicState] = useState(false);
   const [folderTonal, setFolderTonalState] = useState(false);
+  const folderTonalEdited = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +89,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           if (storedDynamic === "true") {
             setDynamicState(true);
           }
-          if (storedFolderTonal === "true") {
+          if (!folderTonalEdited.current && storedFolderTonal === "true") {
             setFolderTonalState(true);
           }
           if (isAccentKey(storedAccent)) {
@@ -134,6 +136,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setFolderTonal = useCallback((enabled: boolean) => {
+    folderTonalEdited.current = true;
     setFolderTonalState(enabled);
     void setSetting(FOLDER_TONAL_SETTING_KEY, enabled ? "true" : "false").catch(
       () => {

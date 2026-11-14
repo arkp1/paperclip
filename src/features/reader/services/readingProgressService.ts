@@ -1,5 +1,5 @@
 import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
-import { isVaultBookmark } from "@/core/database/privateVaultRepository";
+import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
 import {
   getVaultSetting,
   setVaultSetting,
@@ -30,13 +30,18 @@ function keyFor(bookmarkId: string) {
 export async function loadReadingProgress(
   bookmarkId: string
 ): Promise<ReadingProgress> {
-  try {
-    const raw = (await isVaultBookmark(bookmarkId))
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    return DEFAULT_PROGRESS;
+  }
+  const raw =
+    privacy === "private"
       ? await getVaultSetting(keyFor(bookmarkId))
       : await getSetting(keyFor(bookmarkId));
-    if (!raw) {
-      return DEFAULT_PROGRESS;
-    }
+  if (!raw) {
+    return DEFAULT_PROGRESS;
+  }
+  try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") {
       return DEFAULT_PROGRESS;
@@ -60,7 +65,8 @@ export async function loadReadingProgress(
       updatedAt:
         typeof value.updatedAt === "number" ? value.updatedAt : 0,
     };
-  } catch {
+  } catch (error) {
+    console.warn("Ignoring malformed reading progress.", error);
     return DEFAULT_PROGRESS;
   }
 }
@@ -69,11 +75,15 @@ export async function saveReadingProgress(
   bookmarkId: string,
   progress: ReadingProgress
 ): Promise<void> {
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked. Reading progress was not saved.");
+  }
   const serialized = JSON.stringify({
     ...progress,
     updatedAt: Date.now(),
   });
-  if (await isVaultBookmark(bookmarkId)) {
+  if (privacy === "private") {
     await setVaultSetting(keyFor(bookmarkId), serialized);
     return;
   }

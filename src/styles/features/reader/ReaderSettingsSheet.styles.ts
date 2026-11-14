@@ -18,7 +18,7 @@ export const styles = StyleSheet.create({
   },
   optionChip: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing[2],

@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
+
+import { isVaultBookmark } from "@/core/database/privateVaultRepository";
+import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
 
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { useBookmarkDetails } from "@/features/bookmarks/hooks/useBookmarkDetails";
@@ -33,6 +36,29 @@ export function BookmarkDetailsScreen({
     useBookmarkDetails(bookmarkId);
   const audioInset = useReaderAudioInset();
   const [actionsVisible, setActionsVisible] = useState(false);
+  const { isUnlocked } = usePrivateSpaceSession();
+  const [privateBookmark, setPrivateBookmark] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (bookmark && isUnlocked) {
+      void isVaultBookmark(bookmark.id).then((isPrivate) => {
+        if (active) {
+          setPrivateBookmark(isPrivate);
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [bookmark, isUnlocked]);
+
+  useEffect(() => {
+    if (privateBookmark && !isUnlocked) {
+      setActionsVisible(false);
+      router.back();
+    }
+  }, [isUnlocked, privateBookmark, router]);
 
   const previewUri = bookmark?.previewImagePath
     ? resolvePreviewImageUri(bookmark.previewImagePath)

@@ -1,14 +1,39 @@
 import { useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
+import * as ScreenCapture from "expo-screen-capture";
 import { Image } from "expo-image";
 
 import {
   closePrivateVault,
-  getPrivateVault,
+  openPrivateVaultForSession,
+  revokePrivateVaultSession,
 } from "@/core/database/privateVault";
+import { migrateLegacyPrivateFoldersToVault } from "@/core/database/vaultTransfers";
 
 let privateSpaceUnlocked = false;
+let unlockGeneration = 0;
+let authenticationInProgress = false;
+let screenCaptureProtected = false;
+let screenCaptureAllowTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleScreenCaptureAllow(): void {
+  if (screenCaptureAllowTimer) {
+    clearTimeout(screenCaptureAllowTimer);
+  }
+  screenCaptureAllowTimer = setTimeout(() => {
+    screenCaptureAllowTimer = null;
+    if (privateSpaceUnlocked || !screenCaptureProtected) {
+      return;
+    }
+    screenCaptureProtected = false;
+    void ScreenCapture.allowScreenCaptureAsync("paperclip-private").catch(
+      (error: unknown) => {
+        console.warn("Could not re-enable screen capture.", error);
+      }
+    );
+  }, 350);
+}
 const listeners = new Set<() => void>();
 let version = 0;
 let appStateSubscription: { remove: () => void } | null = null;
@@ -26,8 +51,16 @@ function ensureAppStateListener() {
   }
 
   appStateSubscription = AppState.addEventListener("change", (state) => {
-    if (state !== "active") {
+    if (state !== "active" && !authenticationInProgress) {
       lockPrivateSpace();
+      return;
+    }
+    if (
+      state === "active" &&
+      !privateSpaceUnlocked &&
+      screenCaptureProtected
+    ) {
+      scheduleScreenCaptureAllow();
     }
   });
 }
@@ -37,7 +70,13 @@ export function isPrivateSpaceUnlocked(): boolean {
 }
 
 export function lockPrivateSpace(): void {
+  unlockGeneration += 1;
+  revokePrivateVaultSession();
+  if (AppState.currentState === "active" && screenCaptureProtected) {
+    scheduleScreenCaptureAllow();
+  }
   if (!privateSpaceUnlocked) {
+    void closePrivateVault();
     return;
   }
   privateSpaceUnlocked = false;
@@ -56,6 +95,7 @@ export type UnlockPrivateSpaceResult =
  */
 export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   ensureAppStateListener();
+  const attempt = unlockGeneration;
 
   try {
     const enrolledLevel =
@@ -73,6 +113,7 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   }
 
   let result: LocalAuthentication.LocalAuthenticationResult;
+  authenticationInProgress = true;
   try {
     result = await LocalAuthentication.authenticateAsync({
       promptMessage: "Unlock private folders",
@@ -81,6 +122,7 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
       disableDeviceFallback: false,
     });
   } catch (error) {
+    authenticationInProgress = false;
     console.warn("Device authentication could not start.", error);
     return {
       success: false,
@@ -88,6 +130,8 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
         ? "This development build is missing the authentication modules. Install the new development build."
         : "Device authentication is unavailable on this device.",
     };
+  } finally {
+    authenticationInProgress = false;
   }
 
   if (!result.success) {
@@ -103,9 +147,21 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     };
   }
 
+  // The app may have backgrounded while the prompt was open. A successful
+  // prompt must not publish a session after the foreground lock event.
+  if (
+    attempt !== unlockGeneration ||
+    AppState.currentState !== "active"
+  ) {
+    await closePrivateVault();
+    return { success: false, message: "Unlock cancelled." };
+  }
+
   try {
-    await getPrivateVault();
+    await openPrivateVaultForSession();
+    await migrateLegacyPrivateFoldersToVault();
   } catch (error) {
+    await closePrivateVault();
     console.warn("The private vault could not be opened.", error);
     return {
       success: false,
@@ -121,7 +177,26 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     };
   }
 
+  if (
+    attempt !== unlockGeneration ||
+    AppState.currentState !== "active"
+  ) {
+    await closePrivateVault();
+    return { success: false, message: "Unlock cancelled." };
+  }
+
   privateSpaceUnlocked = true;
+  if (screenCaptureAllowTimer) {
+    clearTimeout(screenCaptureAllowTimer);
+    screenCaptureAllowTimer = null;
+  }
+  screenCaptureProtected = true;
+  await ScreenCapture.preventScreenCaptureAsync("paperclip-private").catch(
+    (error: unknown) => {
+      screenCaptureProtected = false;
+      console.warn("Could not enable app-switcher protection.", error);
+    }
+  );
   emit();
   return { success: true };
 }

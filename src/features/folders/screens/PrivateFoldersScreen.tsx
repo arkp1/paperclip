@@ -239,6 +239,7 @@ export function PrivateFoldersScreen() {
       <DeleteFolderDialog
         folder={deleteTarget}
         visible={deleteTarget !== null}
+        allowKeepBookmarks={false}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
       />

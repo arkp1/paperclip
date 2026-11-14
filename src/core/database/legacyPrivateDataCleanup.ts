@@ -1,66 +1,96 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 import { File, Paths } from "expo-file-system";
-import { Image } from "expo-image";
+
+const PENDING_CLEANUP_KEY = "security:pending_cleanup";
+
+type PendingCleanup = {
+  files: string[];
+  settings: string[];
+};
+
+async function readPendingCleanup(
+  main: SQLiteDatabase
+): Promise<PendingCleanup> {
+  const row = await main.getFirstAsync<{ value: string }>(
+    "SELECT value FROM app_settings WHERE key = ?",
+    PENDING_CLEANUP_KEY
+  );
+  if (!row?.value) {
+    return { files: [], settings: [] };
+  }
+  try {
+    const parsed = JSON.parse(row.value) as Partial<PendingCleanup>;
+    return {
+      files: Array.isArray(parsed.files)
+        ? parsed.files.filter((value): value is string => typeof value === "string")
+        : [],
+      settings: Array.isArray(parsed.settings)
+        ? parsed.settings.filter(
+            (value): value is string => typeof value === "string"
+          )
+        : [],
+    };
+  } catch {
+    return { files: [], settings: [] };
+  }
+}
+
+async function savePendingCleanup(
+  main: SQLiteDatabase,
+  pending: PendingCleanup
+): Promise<void> {
+  if (pending.files.length === 0 && pending.settings.length === 0) {
+    await main.runAsync(
+      "DELETE FROM app_settings WHERE key = ?",
+      PENDING_CLEANUP_KEY
+    );
+    return;
+  }
+  await main.runAsync(
+    `INSERT INTO app_settings (key, value, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    PENDING_CLEANUP_KEY,
+    JSON.stringify(pending),
+    Date.now()
+  );
+}
 
 /**
- * Removes private records and previews left in the unencrypted main database
- * by builds that predate the encrypted vault. The product owner explicitly
- * approved dropping this legacy development data.
+ * Retries plaintext cleanup records left by older builds. It deliberately does
+ * not delete legacy private folders or bookmarks here: those are migrated into
+ * the authenticated vault on unlock, preserving user data.
  */
 export async function cleanupLegacyPlaintextPrivateData(
   main: SQLiteDatabase
 ): Promise<void> {
-  const privateBookmarks = await main.getAllAsync<{
-    id: string;
-    previewImagePath: string | null;
-  }>(
-    `SELECT b.id, b.preview_image_path AS previewImagePath
-     FROM bookmarks b
-     JOIN folders f ON f.id = b.folder_id
-     WHERE f.is_private = 1`
-  );
-  const legacyPrivateFolders = await main.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM folders WHERE is_private = 1"
-  );
-  if (privateBookmarks.length === 0 && (legacyPrivateFolders?.count ?? 0) === 0) {
+  const pending = await readPendingCleanup(main);
+  if (pending.files.length === 0 && pending.settings.length === 0) {
     return;
   }
 
-  await main.execAsync("PRAGMA secure_delete = ON;");
-  // Image decoders can retain copies outside the preview directory.
-  await Image.clearDiskCache().catch(() => undefined);
-  await Image.clearMemoryCache().catch(() => undefined);
-
-  for (const bookmark of privateBookmarks) {
-    if (bookmark.previewImagePath) {
-      try {
-        const file = new File(Paths.document, bookmark.previewImagePath);
-        if (file.exists) {
-          file.delete();
-        }
-      } catch {
-        // Best-effort removal of the legacy plaintext preview.
+  const files: string[] = [];
+  for (const path of pending.files) {
+    try {
+      const file = new File(Paths.document, path);
+      if (file.exists) {
+        file.delete();
       }
+    } catch (error) {
+      console.warn("Private preview cleanup is still pending.", error);
+      files.push(path);
     }
   }
 
-  for (const bookmark of privateBookmarks) {
-    await main
-      .runAsync(
-        "DELETE FROM app_settings WHERE key IN (?, ?)",
-        `reader_progress:${bookmark.id}`,
-        `reader_annotations:${bookmark.id}`
-      )
-      .catch(() => undefined);
+  const settings: string[] = [];
+  for (const key of pending.settings) {
+    try {
+      await main.runAsync("DELETE FROM app_settings WHERE key = ?", key);
+    } catch (error) {
+      console.warn("Private reader setting cleanup is still pending.", error);
+      settings.push(key);
+    }
   }
 
-  await main.runAsync(
-    "DELETE FROM bookmarks WHERE folder_id IN (SELECT id FROM folders WHERE is_private = 1)"
-  );
-  await main.runAsync("DELETE FROM folders WHERE is_private = 1");
-  await main.runAsync(
-    "DELETE FROM article_contents WHERE bookmark_id NOT IN (SELECT id FROM bookmarks)"
-  );
-  await main.execAsync("PRAGMA wal_checkpoint(TRUNCATE);");
-  await main.execAsync("VACUUM;");
+  await savePendingCleanup(main, { files, settings });
 }

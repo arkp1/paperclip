@@ -70,8 +70,9 @@ current runtime captures.
 
 ### Privacy and data
 - Private folders gated by biometrics or device PIN.
-- The private-folder gate is **app-level lock only**; database encryption is not
-  enabled in this build. The gate clears when the app leaves the foreground.
+- Private folder records, reader data, and preview images are stored in a separate
+  SQLCipher-encrypted vault. The app-level authentication gate is separate from
+  database encryption and clears when the app leaves the foreground.
 - Versioned public JSON export/import with folders, links, notes, favourites,
   and cached preview images. Private folders and their contents are excluded.
 - Import validates before changing the library.
@@ -151,10 +152,10 @@ and [`docs/`](docs/).
   (Android Keystore-backed), but key release is still gated by the app’s
   biometric/device-PIN flow rather than a cryptographically auth-bound native
   Keystore key.
-- Private preview images are not retained. They are deleted when a folder
-  becomes private so no private image files remain in plaintext app storage.
-  Existing private data from builds before this change is removed on first
-  launch.
+- Private preview images are retained as encrypted vault data and restored when a
+  folder or bookmark moves back to public storage. Existing private records from
+  builds before this change are migrated into the vault on the first unlock and
+  are not deleted from the public database until that copy succeeds.
 - Dynamic colour affects native Compose controls; React Native surfaces keep
   the selected Paperclip accent because the wallpaper palette is not exposed to
   JS.

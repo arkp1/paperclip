@@ -1,8 +1,13 @@
 import { Modal, useWindowDimensions, View } from "react-native";
 import { Image } from "expo-image";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -29,6 +34,7 @@ export function ReaderImageViewer({
 }: ReaderImageViewerProps) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const startScale = useSharedValue(1);
 
@@ -41,7 +47,7 @@ export function ReaderImageViewer({
     })
     .onEnd(() => {
       if (scale.value <= 1.05) {
-        scale.value = withTiming(1, { duration: 160 });
+        scale.value = withTiming(1, { duration: reduceMotion ? 0 : 160 });
       }
     });
 
@@ -53,12 +59,12 @@ export function ReaderImageViewer({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? "none" : "fade"}
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.root}>
+      <GestureHandlerRootView style={styles.root}>
         <GestureDetector gesture={pinch}>
           <Animated.View
             style={[styles.imageWrap, { width, height }, imageStyle]}
@@ -86,7 +92,7 @@ export function ReaderImageViewer({
             inkColor="#FFFFFF"
           />
         </View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

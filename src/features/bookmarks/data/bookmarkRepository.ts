@@ -5,12 +5,14 @@ import {
   isVaultBookmark,
   isVaultFolder,
   listVaultBookmarksInFolder,
+  movePublicBookmarkToVault,
   moveVaultBookmark,
   moveVaultBookmarkToPublic,
   updateVaultBookmarkContent,
   updateVaultBookmarkFavorite,
 } from "@/core/database/privateVaultRepository";
 import { isPrivateVaultOpen } from "@/core/database/privateVault";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
 import {
@@ -373,7 +375,16 @@ export async function moveBookmark(id: string, folderId: string | null): Promise
       await moveVaultBookmark(id, folderId);
       return;
     }
-    await moveVaultBookmarkToPublic(id, folderId);
+    await withPrivacyWriteLock(() =>
+      moveVaultBookmarkToPublic(id, folderId)
+    );
+    return;
+  }
+
+  if (folderId && (await isVaultFolder(folderId))) {
+    await withPrivacyWriteLock(() =>
+      movePublicBookmarkToVault(id, folderId)
+    );
     return;
   }
 

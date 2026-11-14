@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { Alert } from "react-native";
 
-import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
+import {
+  getSetting,
+  setSetting,
+  type AppSettingKey,
+} from "@/core/preferences/appSettingsRepository";
 
 export type ReaderFont = "sans" | "serif" | "mono";
 export type ReaderBackground = "white" | "sepia" | "grey" | "black";
@@ -88,7 +93,29 @@ function isReaderAlign(value: string | null): value is ReaderAlign {
  */
 export function useReaderPreferences() {
   const [preferences, setPreferences] = useState<ReaderPreferences>(DEFAULTS);
-  const userChanged = useRef(false);
+  const changedFields = useRef(new Set<keyof ReaderPreferences>());
+
+  const reportSaveError = (key: AppSettingKey, value: string) => {
+    Alert.alert(
+      "Reader settings",
+      "The setting changed for this session but could not be saved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Retry",
+          onPress: () => {
+            void setSetting(key, value).catch(() =>
+              reportSaveError(key, value)
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const persist = (key: AppSettingKey, value: string) => {
+    void setSetting(key, value).catch(() => reportSaveError(key, value));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -113,13 +140,13 @@ export function useReaderPreferences() {
           background,
           paginate,
         ]) => {
-          if (cancelled || userChanged.current) {
+          if (cancelled) {
             return;
           }
           const parsedSize = Number.parseInt(size ?? "", 10);
           const parsedLineHeight = Number.parseFloat(lineHeight ?? "");
           const parsedSpacing = Number.parseInt(paragraphSpacing ?? "", 10);
-          setPreferences({
+          const loaded: ReaderPreferences = {
             font: isReaderFont(font) ? font : DEFAULTS.font,
             fontSize:
               Number.isFinite(parsedSize) && parsedSize >= 14 && parsedSize <= 28
@@ -143,6 +170,29 @@ export function useReaderPreferences() {
               ? background
               : DEFAULTS.background,
             paginate: paginate === "true",
+          };
+          setPreferences((current) => {
+            const changed = changedFields.current;
+            return {
+              font: changed.has("font") ? current.font : loaded.font,
+              fontSize: changed.has("fontSize")
+                ? current.fontSize
+                : loaded.fontSize,
+              lineHeight: changed.has("lineHeight")
+                ? current.lineHeight
+                : loaded.lineHeight,
+              paragraphSpacing: changed.has("paragraphSpacing")
+                ? current.paragraphSpacing
+                : loaded.paragraphSpacing,
+              width: changed.has("width") ? current.width : loaded.width,
+              align: changed.has("align") ? current.align : loaded.align,
+              background: changed.has("background")
+                ? current.background
+                : loaded.background,
+              paginate: changed.has("paginate")
+                ? current.paginate
+                : loaded.paginate,
+            };
           });
         }
       )
@@ -156,58 +206,54 @@ export function useReaderPreferences() {
   }, []);
 
   const setFont = (font: ReaderFont) => {
-    userChanged.current = true;
+    changedFields.current.add("font");
     setPreferences((previous) => ({ ...previous, font }));
-    void setSetting(FONT_SETTING, font).catch(() => undefined);
+    persist(FONT_SETTING, font);
   };
 
   const setFontSize = (fontSize: number) => {
-    userChanged.current = true;
+    changedFields.current.add("fontSize");
     const clamped = Math.max(14, Math.min(28, fontSize));
     setPreferences((previous) => ({ ...previous, fontSize: clamped }));
-    void setSetting(SIZE_SETTING, String(clamped)).catch(() => undefined);
+    persist(SIZE_SETTING, String(clamped));
   };
 
   const setLineHeight = (lineHeight: number) => {
-    userChanged.current = true;
+    changedFields.current.add("lineHeight");
     const clamped = Math.max(1.2, Math.min(2.2, lineHeight));
     setPreferences((previous) => ({ ...previous, lineHeight: clamped }));
-    void setSetting(LINE_HEIGHT_SETTING, String(clamped)).catch(() => undefined);
+    persist(LINE_HEIGHT_SETTING, String(clamped));
   };
 
   const setParagraphSpacing = (paragraphSpacing: number) => {
-    userChanged.current = true;
+    changedFields.current.add("paragraphSpacing");
     const clamped = Math.max(8, Math.min(32, paragraphSpacing));
     setPreferences((previous) => ({ ...previous, paragraphSpacing: clamped }));
-    void setSetting(PARAGRAPH_SPACING_SETTING, String(clamped)).catch(
-      () => undefined
-    );
+    persist(PARAGRAPH_SPACING_SETTING, String(clamped));
   };
 
   const setWidth = (width: ReaderWidth) => {
-    userChanged.current = true;
+    changedFields.current.add("width");
     setPreferences((previous) => ({ ...previous, width }));
-    void setSetting(WIDTH_SETTING, width).catch(() => undefined);
+    persist(WIDTH_SETTING, width);
   };
 
   const setAlign = (align: ReaderAlign) => {
-    userChanged.current = true;
+    changedFields.current.add("align");
     setPreferences((previous) => ({ ...previous, align }));
-    void setSetting(ALIGN_SETTING, align).catch(() => undefined);
+    persist(ALIGN_SETTING, align);
   };
 
   const setBackground = (background: ReaderBackground) => {
-    userChanged.current = true;
+    changedFields.current.add("background");
     setPreferences((previous) => ({ ...previous, background }));
-    void setSetting(BACKGROUND_SETTING, background).catch(() => undefined);
+    persist(BACKGROUND_SETTING, background);
   };
 
   const setPaginate = (paginate: boolean) => {
-    userChanged.current = true;
+    changedFields.current.add("paginate");
     setPreferences((previous) => ({ ...previous, paginate }));
-    void setSetting(PAGINATE_SETTING, paginate ? "true" : "false").catch(
-      () => undefined
-    );
+    persist(PAGINATE_SETTING, paginate ? "true" : "false");
   };
 
   return {

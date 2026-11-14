@@ -165,11 +165,19 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     },
   ];
 
+  const keyedBlocks = useMemo(
+    () =>
+      blocks.map((block, index) => ({
+        ...block,
+        sourceKey: `block-${index}`,
+      })),
+    [blocks]
+  );
   const pages = useMemo(
     () =>
       preferences.paginate
         ? paginate(
-            blocks,
+            keyedBlocks,
             preferences.fontSize,
             Math.max(220, contentWidth),
             height,
@@ -177,7 +185,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           )
         : [],
     [
-      blocks,
+      keyedBlocks,
       contentWidth,
       preferences.fontSize,
       preferences.lineHeight,
@@ -206,24 +214,31 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     if (!query) {
       return [] as { index: number; key: string }[];
     }
-    return blocks.reduce<{ index: number; key: string }[]>(
+    return keyedBlocks.reduce<{ index: number; key: string }[]>(
       (matches, block, index) => {
         if (block.type !== "image" && block.text.toLowerCase().includes(query)) {
-          matches.push({ index, key: blockAnnotationKey(block) });
+          matches.push({
+            index,
+            key: block.sourceKey ?? blockAnnotationKey(block),
+          });
         }
         return matches;
       },
       []
     );
-  }, [blocks, searchQuery]);
+  }, [keyedBlocks, searchQuery]);
 
   useEffect(() => {
     let active = true;
-    void loadAnnotations(bookmarkId).then((next) => {
-      if (active) {
-        setAnnotations(next);
-      }
-    });
+    void loadAnnotations(bookmarkId)
+      .then((next) => {
+        if (active) {
+          setAnnotations(next);
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("Could not load reader annotations.", error);
+      });
     return () => {
       active = false;
     };
@@ -233,8 +248,18 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     setSearchCursor(0);
   }, [searchQuery]);
   useEffect(() => {
+    restoredRef.current = false;
     setPageIndex(0);
-  }, [bookmarkId, fontFamily, preferences.fontSize, preferences.paginate]);
+  }, [
+    bookmarkId,
+    fontFamily,
+    preferences.fontSize,
+    preferences.lineHeight,
+    preferences.paragraphSpacing,
+    preferences.width,
+    preferences.align,
+    preferences.paginate,
+  ]);
   const speechParagraphs = useMemo(
     () =>
       blocks
@@ -342,7 +367,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         void saveReadingProgress(bookmarkId, {
           ...latestProgress.current,
           updatedAt: Date.now(),
-        }).catch(() => undefined);
+        }).catch((error: unknown) => {
+          console.warn("Could not save reading progress on exit.", error);
+        });
       }
     };
   }, [bookmarkId]);
@@ -377,7 +404,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       mode,
       completed: isCompleted,
       updatedAt: Date.now(),
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      console.warn("Could not save reading progress.", error);
+    });
   };
 
   const handleScroll = (event: {
@@ -415,11 +444,15 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const toggleCompleted = () => {
     const next = !completed;
     const progress = next ? 1 : Math.max(0.01, readingProgress);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
     setCompleted(next);
     setReadingProgress(progress);
     persistProgress(
       progress,
-      0,
+      preferences.paginate ? 0 : (latestProgress.current?.offset ?? 0),
       pageIndex,
       preferences.paginate ? "pages" : "scroll",
       next,
@@ -444,7 +477,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       const page = pages.findIndex((candidate) =>
         candidate.blocks.some(
           (block) =>
-            block.type !== "image" && blockAnnotationKey(block) === blockKey
+            block.type !== "image" &&
+            (block.sourceKey ?? blockAnnotationKey(block)) === blockKey
         )
       );
       if (page >= 0) {
@@ -498,7 +532,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     setAnnotateMode(false);
   };
 
-  const saveAnnotation = (color: HighlightColor, note: string) => {
+  const saveAnnotation = async (color: HighlightColor, note: string) => {
     if (!annotationKey) {
       return;
     }
@@ -512,23 +546,37 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       note,
       createdAt: Date.now(),
     });
-    setAnnotations(next);
-    void saveAnnotations(bookmarkId, next).catch(() => undefined);
-    setAnnotationVisible(false);
-    setAnnotationKey(null);
+    try {
+      await saveAnnotations(bookmarkId, next);
+      setAnnotations(next);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
+    } catch {
+      Alert.alert(
+        "Highlight not saved",
+        "The highlight could not be saved. Your previous highlights are unchanged."
+      );
+    }
   };
 
-  const removeAnnotation = () => {
+  const removeAnnotation = async () => {
     if (!annotationKey) {
       return;
     }
     const next = annotations.filter(
       (annotation) => annotation.blockKey !== annotationKey
     );
-    setAnnotations(next);
-    void saveAnnotations(bookmarkId, next).catch(() => undefined);
-    setAnnotationVisible(false);
-    setAnnotationKey(null);
+    try {
+      await saveAnnotations(bookmarkId, next);
+      setAnnotations(next);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
+    } catch {
+      Alert.alert(
+        "Highlight not removed",
+        "The highlight could not be removed. Your saved highlights are unchanged."
+      );
+    }
   };
 
   useEffect(() => {
@@ -551,6 +599,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       setMoveVisible(false);
       setSettingsVisible(false);
       setSearchVisible(false);
+      setViewerImage(null);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
       clearAudio();
       if (bookmarkIsPrivate) {
         router.back();
@@ -671,9 +722,16 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           );
         }
 
-        const annotation = annotationMap.get(blockAnnotationKey(block));
+        const contentKey = blockAnnotationKey(block);
+        const blockKey = block.sourceKey ?? contentKey;
+        const annotation =
+          annotationMap.get(blockKey) ?? annotationMap.get(contentKey);
+        const annotationTarget = annotationMap.has(blockKey)
+          ? blockKey
+          : annotationMap.has(contentKey)
+            ? contentKey
+            : blockKey;
         const tint = annotation ? tints[annotation.color] : null;
-        const blockKey = blockAnnotationKey(block);
 
         return (
           <View
@@ -689,7 +747,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
               selectable={!annotateMode}
               onPress={
                 annotateMode
-                  ? () => openAnnotationFor(blockAnnotationKey(block))
+                  ? () => openAnnotationFor(annotationTarget)
                   : undefined
               }
               style={[

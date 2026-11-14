@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { getBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
+import { getFolderById } from "@/features/folders/data/folderRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
 
 type BookmarkDetailsState = {
@@ -20,8 +21,13 @@ export function useBookmarkDetails(bookmarkId: string) {
   const load = useCallback(async () => {
     try {
       const bookmark = await getBookmarkById(bookmarkId);
+      const folder = bookmark?.folderId
+        ? await getFolderById(bookmark.folderId)
+        : null;
       setState({
-        bookmark: bookmark ? { ...bookmark, folderName: null } : null,
+        bookmark: bookmark
+          ? { ...bookmark, folderName: folder?.name ?? null }
+          : null,
         status: bookmark ? "ready" : "not_found",
         errorMessage: null,
       });

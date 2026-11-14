@@ -205,9 +205,13 @@ export function FoldersScreen() {
                 <SmartCollectionCard
                   icon="lock-outline"
                   title="Private"
-                  subtitle={`${privateFolderCount} ${
-                    privateFolderCount === 1 ? "folder" : "folders"
-                  }`}
+                  subtitle={
+                    privateFolderCount === null
+                      ? "Locked"
+                      : `${privateFolderCount} ${
+                          privateFolderCount === 1 ? "folder" : "folders"
+                        }`
+                  }
                   onPress={() => router.push("/folders/private")}
                 />
               </View>

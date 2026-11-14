@@ -1,5 +1,9 @@
 import { getDatabase } from "@/core/database/database";
-import { isVaultBookmark } from "@/core/database/privateVaultRepository";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import {
+  getBookmarkPrivacy,
+  isVaultBookmark,
+} from "@/core/database/privateVaultRepository";
 import {
   getBookmarkById,
   deleteBookmark,
@@ -30,21 +34,32 @@ export async function enrichBookmarkPreview(
   }
 
   try {
-    const previewImagePath = await cachePreviewImage(bookmarkId, imageUrl);
-    await updateBookmarkPreviewAsset(bookmarkId, {
-      previewImagePath,
-      previewStatus: "success",
-      previewFetchedAt: Date.now(),
+    await withPrivacyWriteLock(async () => {
+      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+        return;
+      }
+      const previewImagePath = await cachePreviewImage(bookmarkId, imageUrl);
+      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+        deletePreviewImage(previewImagePath);
+        return;
+      }
+      await updateBookmarkPreviewAsset(bookmarkId, {
+        previewImagePath,
+        previewStatus: "success",
+        previewFetchedAt: Date.now(),
+      });
     });
   } catch (error) {
     console.warn("Could not cache the preview image.", error);
-    await updateBookmarkPreviewAsset(bookmarkId, {
-      previewImagePath: null,
-      previewStatus: "partial",
-      previewFetchedAt: Date.now(),
-    }).catch(() => {
-      // The bookmark remains saved with its fallback card.
-    });
+    if ((await getBookmarkPrivacy(bookmarkId)) === "public") {
+      await updateBookmarkPreviewAsset(bookmarkId, {
+        previewImagePath: null,
+        previewStatus: "partial",
+        previewFetchedAt: Date.now(),
+      }).catch(() => {
+        // The bookmark remains saved with its fallback card.
+      });
+    }
   }
 }
 
@@ -62,37 +77,50 @@ export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> 
 
   const metadata = await fetchLinkMetadata(bookmark.originalUrl);
 
-  let previewImagePath: string | null = null;
-  if (metadata.imageUrl) {
-    try {
-      previewImagePath = await cachePreviewImage(bookmarkId, metadata.imageUrl);
-    } catch (error) {
-      console.warn("Could not refresh the preview image.", error);
+  await withPrivacyWriteLock(async () => {
+    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+      throw new Error("The bookmark moved to the private vault.");
     }
-  }
 
-  const previewStatus: PreviewStatus = previewImagePath
-    ? "success"
-    : metadata.title || metadata.description
-      ? "partial"
-      : "unavailable";
+    let previewImagePath: string | null = null;
+    if (metadata.imageUrl) {
+      try {
+        previewImagePath = await cachePreviewImage(bookmarkId, metadata.imageUrl);
+      } catch (error) {
+        console.warn("Could not refresh the preview image.", error);
+      }
+    }
 
-  await updateBookmarkMetadata(bookmarkId, {
-    title: metadata.title,
-    description: metadata.description,
-    sourceName: metadata.siteName,
-    canonicalUrl: metadata.canonicalUrl,
-    previewStatus,
-    previewFetchedAt: Date.now(),
-    previewImagePath,
+    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+      if (previewImagePath) {
+        deletePreviewImage(previewImagePath);
+      }
+      throw new Error("The bookmark moved to the private vault.");
+    }
+
+    const previewStatus: PreviewStatus = previewImagePath
+      ? "success"
+      : metadata.title || metadata.description
+        ? "partial"
+        : "unavailable";
+
+    await updateBookmarkMetadata(bookmarkId, {
+      title: metadata.title,
+      description: metadata.description,
+      sourceName: metadata.siteName,
+      canonicalUrl: metadata.canonicalUrl,
+      previewStatus,
+      previewFetchedAt: Date.now(),
+      previewImagePath,
+    });
+
+    if (
+      bookmark.previewImagePath &&
+      bookmark.previewImagePath !== previewImagePath
+    ) {
+      deletePreviewImage(bookmark.previewImagePath);
+    }
   });
-
-  if (
-    bookmark.previewImagePath &&
-    bookmark.previewImagePath !== previewImagePath
-  ) {
-    deletePreviewImage(bookmark.previewImagePath);
-  }
 }
 
 export async function deleteBookmarkWithAssets(bookmarkId: string): Promise<void> {

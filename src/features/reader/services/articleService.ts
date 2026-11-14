@@ -1,7 +1,7 @@
 import { getDatabase } from "@/core/database/database";
 import {
+  getBookmarkPrivacy,
   getVaultArticle,
-  isVaultBookmark,
   saveVaultArticle,
 } from "@/core/database/privateVaultRepository";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
@@ -11,11 +11,13 @@ export type ArticleBlock =
   | {
       type: "heading" | "paragraph" | "quote";
       text: string;
+      sourceKey?: string;
     }
   | {
       type: "image";
       src: string;
       alt: string;
+      sourceKey?: string;
     };
 
 export type CachedArticle = {
@@ -84,7 +86,11 @@ async function getCachedArticle(
   bookmarkId: string,
   allowStale = false
 ): Promise<CachedArticle | null> {
-  const row = (await isVaultBookmark(bookmarkId))
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked.");
+  }
+  const row = (privacy === "private")
     ? await getVaultArticle(bookmarkId)
     : await (
         await getDatabase()
@@ -128,7 +134,11 @@ async function saveArticle(
   bookmarkId: string,
   article: CachedArticle
 ): Promise<void> {
-  if (await isVaultBookmark(bookmarkId)) {
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked.");
+  }
+  if (privacy === "private") {
     await saveVaultArticle(
       bookmarkId,
       JSON.stringify(article.blocks),

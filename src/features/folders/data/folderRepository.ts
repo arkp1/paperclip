@@ -13,6 +13,7 @@ import {
   updateVaultFolderName,
 } from "@/core/database/privateVaultRepository";
 import { isPrivateVaultOpen } from "@/core/database/privateVault";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -115,7 +116,10 @@ export async function getPrivateFolders(): Promise<Folder[]> {
   return getVaultFolders();
 }
 
-export async function countPrivateFolders(): Promise<number> {
+export async function countPrivateFolders(): Promise<number | null> {
+  if (!isPrivateVaultOpen()) {
+    return null;
+  }
   return countVaultFolders();
 }
 
@@ -168,14 +172,23 @@ export async function setFolderPrivate(
       throw new Error("Unlock the private space first.");
     }
     if (await isVaultFolder(folderId)) {
-      return;
+      const database = await getDatabase();
+      const publicSource = await database.getFirstAsync<{ id: string }>(
+        "SELECT id FROM folders WHERE id = ? AND is_private = 0",
+        folderId
+      );
+      if (!publicSource) {
+        return;
+      }
     }
-    await movePublicFolderToVault(folderId);
+    await withPrivacyWriteLock(() =>
+      movePublicFolderToVault(folderId)
+    );
     return;
   }
 
   if (await isVaultFolder(folderId)) {
-    await moveVaultFolderToPublic(folderId);
+    await withPrivacyWriteLock(() => moveVaultFolderToPublic(folderId));
     return;
   }
 

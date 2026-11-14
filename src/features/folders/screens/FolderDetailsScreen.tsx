@@ -81,8 +81,9 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     if (folder?.isPrivate && !isUnlocked) {
       setSelectedBookmark(null);
       setActionsVisible(false);
+      router.back();
     }
-  }, [folder?.isPrivate, isUnlocked]);
+  }, [folder?.isPrivate, isUnlocked, router]);
 
   const unlockCurrentFolder = async () => {
     const result = await unlockPrivateSpace();
@@ -341,6 +342,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       <DeleteFolderDialog
         folder={folder}
         visible={deleteVisible}
+        allowKeepBookmarks={!folder?.isPrivate}
         onClose={() => setDeleteVisible(false)}
         onConfirm={handleDelete}
       />

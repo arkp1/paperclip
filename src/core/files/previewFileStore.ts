@@ -26,6 +26,9 @@ function getPreviewDirectory(): Directory {
 
 /** Resolves a stored relative preview path to a displayable file URI. */
 export function resolvePreviewImageUri(relativePath: string): string | null {
+  if (relativePath.startsWith("data:")) {
+    return relativePath;
+  }
   try {
     const file = new File(Paths.document, relativePath);
     return file.exists ? file.uri : null;

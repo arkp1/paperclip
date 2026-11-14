@@ -12,6 +12,7 @@ import { useTheme } from "@/theme";
 type DeleteFolderDialogProps = {
   folder: Folder | null;
   visible: boolean;
+  allowKeepBookmarks?: boolean;
   onClose: () => void;
   onConfirm: (strategy: FolderDeleteStrategy) => Promise<void>;
 };
@@ -19,6 +20,7 @@ type DeleteFolderDialogProps = {
 export function DeleteFolderDialog({
   folder,
   visible,
+  allowKeepBookmarks = true,
   onClose,
   onConfirm,
 }: DeleteFolderDialogProps) {
@@ -57,27 +59,34 @@ export function DeleteFolderDialog({
       title={`Delete “${folder.name}”?`}
       description={
         hasBookmarks
-          ? "Choose what happens to the links in this folder. Nothing is deleted until you confirm."
+          ? allowKeepBookmarks
+            ? "Choose what happens to the links in this folder. Nothing is deleted until you confirm."
+            : "Private links cannot be moved to public Uncategorized. Deleting this folder also deletes its private links."
           : "This folder is empty. Deleting it cannot be undone."
       }
       actions={
         <>
           {hasBookmarks ? (
             <>
-              <View style={styles.option}>
-                <Button
-                  label="Move links to Uncategorized"
-                  variant="tonal"
-                  onPress={() => {
-                    void run("keepBookmarks");
-                  }}
-                  loading={pendingStrategy === "keepBookmarks"}
-                  disabled={pendingStrategy !== null}
-                />
-                <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
-                  Recommended — every saved link is kept.
-                </AppText>
-              </View>
+              {allowKeepBookmarks ? (
+                <View style={styles.option}>
+                  <Button
+                    label="Move links to Uncategorized"
+                    variant="tonal"
+                    onPress={() => {
+                      void run("keepBookmarks");
+                    }}
+                    loading={pendingStrategy === "keepBookmarks"}
+                    disabled={pendingStrategy !== null}
+                  />
+                  <AppText
+                    variant="bodySmall"
+                    color={theme.colors.onSurfaceVariant}
+                  >
+                    Recommended — every saved link is kept.
+                  </AppText>
+                </View>
+              ) : null}
 
               <View style={styles.option}>
                 <Button

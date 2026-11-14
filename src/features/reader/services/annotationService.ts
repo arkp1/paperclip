@@ -1,5 +1,5 @@
 import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
-import { isVaultBookmark } from "@/core/database/privateVaultRepository";
+import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
 import {
   getVaultSetting,
   setVaultSetting,
@@ -53,19 +53,25 @@ export function blockAnnotationKey(block: {
 export async function loadAnnotations(
   bookmarkId: string
 ): Promise<ReaderAnnotation[]> {
-  try {
-    const raw = (await isVaultBookmark(bookmarkId))
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked.");
+  }
+  const raw =
+    privacy === "private"
       ? await getVaultSetting(keyFor(bookmarkId))
       : await getSetting(keyFor(bookmarkId));
-    if (!raw) {
-      return [];
-    }
+  if (!raw) {
+    return [];
+  }
+  try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       return [];
     }
     return parsed.filter(isAnnotation);
-  } catch {
+  } catch (error) {
+    console.warn("Ignoring malformed reader annotations.", error);
     return [];
   }
 }
@@ -74,8 +80,12 @@ export async function saveAnnotations(
   bookmarkId: string,
   annotations: ReaderAnnotation[]
 ): Promise<void> {
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked. Annotations were not saved.");
+  }
   const serialized = JSON.stringify(annotations);
-  if (await isVaultBookmark(bookmarkId)) {
+  if (privacy === "private") {
     await setVaultSetting(keyFor(bookmarkId), serialized);
     return;
   }
