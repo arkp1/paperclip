@@ -5,6 +5,7 @@ import {
   getVaultSetting,
   setVaultSetting,
 } from "@/core/database/privateVault";
+import { emitReadingProgress } from "@/features/reader/services/readingProgressEvents";
 
 export type ReadingProgress = {
   progress: number;
@@ -90,8 +91,10 @@ export async function saveReadingProgress(
     });
     if (privacy === "private") {
       await setVaultSetting(keyFor(bookmarkId), serialized);
+      emitReadingProgress(bookmarkId, progress.progress);
       return;
     }
     await setSetting(keyFor(bookmarkId), serialized);
+    emitReadingProgress(bookmarkId, progress.progress);
   });
 }

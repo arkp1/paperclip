@@ -65,7 +65,7 @@ export function HomeScreen() {
 
   const openBookmark = useCallback(
     (bookmark: Bookmark) => {
-      openBookmarkDestination(bookmark, router);
+      void openBookmarkDestination(bookmark, router);
     },
     [router],
   );
@@ -114,6 +114,32 @@ export function HomeScreen() {
             </AppText>
             <AppText variant="headlineLarge">Save now. Read later.</AppText>
           </View>
+
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Search your saved links"
+            onPress={() => router.push("/search")}
+            scaleTo={0.99}
+            style={[
+              styles.searchField,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.outline,
+              },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="magnify"
+              size={22}
+              color={theme.colors.onSurfaceVariant}
+            />
+            <AppText
+              variant="bodyLarge"
+              color={theme.colors.onSurfaceVariant}
+            >
+              Search your saved links
+            </AppText>
+          </ScalePressable>
         </View>
 
         <View style={styles.sectionHeaderRow}>
@@ -219,10 +245,15 @@ export function HomeScreen() {
             }}
           />
         ) : bookmarks.length === 0 ? (
-          <AppText variant="bodyMedium" color={theme.colors.onSurfaceVariant}>
-            Links you save will appear here. Use Save link to add your first
-            one.
-          </AppText>
+          <EmptyState
+            icon="bookmark-plus-outline"
+            title="Nothing saved yet"
+            description="Share any link to Paperclip from your browser or another app, or add one here."
+            action={{
+              label: "Save a link",
+              onPress: () => router.push("/bookmarks/save"),
+            }}
+          />
         ) : (
           <View style={styles.grid}>
             {bookmarks.map((bookmark: BookmarkView) => (

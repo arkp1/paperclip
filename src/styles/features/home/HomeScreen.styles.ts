@@ -59,4 +59,13 @@ export const styles = StyleSheet.create({
   bookmarkSlide: {
     width: 250,
   },
+  searchField: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    paddingHorizontal: spacing[4],
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });

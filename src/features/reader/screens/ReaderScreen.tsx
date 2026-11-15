@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -8,11 +9,16 @@ import {
 } from "react";
 import {
   Alert,
+  BackHandler,
   FlatList,
+  LayoutAnimation,
+  Platform,
   Pressable,
   ScrollView,
   Share,
   Text,
+  ToastAndroid,
+  UIManager,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -24,7 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { moveBookmark } from "@/features/bookmarks/data/bookmarkRepository";
 import { deleteBookmarkWithAssets } from "@/features/bookmarks/services/previewService";
 import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
-import { isVaultBookmark } from "@/core/database/privateVaultRepository";
+import { isVaultBookmark, getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
 import { FolderPickerContent } from "@/features/folders/components/FolderPickerDialog";
 import { getAllFolders } from "@/features/folders/data/folderRepository";
 import type { Folder } from "@/features/folders/types";
@@ -55,17 +61,19 @@ import {
   loadReadingProgress,
   saveReadingProgress,
 } from "@/features/reader/services/readingProgressService";
+import { rememberReaderFallbackDomain } from "@/features/reader/utils/readerDomainFallbacks";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { Button } from "@/shared/ui/Button";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { IconButton } from "@/shared/ui/IconButton";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
+import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/reader/ReaderScreen.styles";
-import { spacing, useTheme } from "@/theme";
+import { motion, spacing, useTheme } from "@/theme";
 
 type ReaderScreenProps = {
   bookmarkId: string;
@@ -85,16 +93,99 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const { theme } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const [fullscreen, setFullscreen] = useState(false);
+  const fullscreenRef = useRef(false);
+  const { preferences, setFont, setFontSize, setLineHeight, setParagraphSpacing, setWidth, setAlign, setBackground, setPaginate } =
+    useReaderPreferences();
   const pageHeight = Math.max(
     240,
     height - insets.top - (fullscreen ? 0 : 64)
   );
-  const { bookmark, blocks, wordCount, status, errorMessage, reload } =
+
+  useEffect(() => {
+    if (
+      Platform.OS === "android" &&
+      UIManager.setLayoutAnimationEnabledExperimental
+    ) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const nextFullscreen = !fullscreenRef.current;
+    fullscreenRef.current = nextFullscreen;
+    if (!preferences.paginate) {
+      const currentOffset = scrollOffsetRef.current;
+      const targetOffset =
+        currentOffset > 0
+          ? Math.max(0, currentOffset + (nextFullscreen ? -64 : 64))
+          : 0;
+      scrollOffsetRef.current = targetOffset;
+      if (latestProgress.current) {
+        latestProgress.current = {
+          ...latestProgress.current,
+          offset: targetOffset,
+        };
+      }
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: targetOffset, animated: false });
+      });
+    }
+
+    if (!reduceMotion) {
+      LayoutAnimation.configureNext({
+        duration: motion.immersive,
+        create: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+        update: { type: LayoutAnimation.Types.easeInEaseOut },
+        delete: {
+          type: LayoutAnimation.Types.easeInEaseOut,
+          property: LayoutAnimation.Properties.opacity,
+        },
+      });
+    }
+    setFullscreen(nextFullscreen);
+  }, [preferences.paginate, reduceMotion]);
+
+  const animateReaderLayout = useCallback(
+    (apply: () => void) => {
+      if (latestProgress.current) {
+        savedProgressRef.current = {
+          ...latestProgress.current,
+          updatedAt: Date.now(),
+        };
+      }
+      if (!reduceMotion) {
+        LayoutAnimation.configureNext({
+          duration: 220,
+          update: { type: LayoutAnimation.Types.easeInEaseOut },
+        });
+      }
+      apply();
+    },
+    [reduceMotion]
+  );
+
+  useEffect(() => {
+    if (!fullscreen) {
+      return;
+    }
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        toggleFullscreen();
+        return true;
+      }
+    );
+    return () => subscription.remove();
+  }, [fullscreen, toggleFullscreen]);
+  const { bookmark, blocks, wordCount, status, errorMessage, fallbackToOriginal, reload } =
     useArticleReader(bookmarkId);
-  const { preferences, setFont, setFontSize, setLineHeight, setParagraphSpacing, setWidth, setAlign, setBackground, setPaginate } =
-    useReaderPreferences();
   const { play: playAudio, clear: clearAudio } = useReaderAudio();
+  const fallbackHandledRef = useRef(false);
   const palette = readerPalette(preferences.background);
   const fontFamily = readerFontFamily(preferences.font);
   const lineHeightMultiplier = readerLineHeightMultiplier(
@@ -137,6 +228,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const [contentHeight, setContentHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrollOffsetRef = useRef(0);
   const pagesRef = useRef<FlatList<ReaderPage>>(null);
   const savedProgressRef = useRef<Awaited<
     ReturnType<typeof loadReadingProgress>
@@ -309,14 +401,45 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   );
 
   useEffect(() => {
-    if (status === "ready" && bookmark) {
-      playAudio({
-        id: bookmark.id,
-        title: bookmark.title,
-        paragraphs: speechParagraphs,
-      });
+    fallbackHandledRef.current = false;
+  }, [bookmarkId]);
+
+  useEffect(() => {
+    if (
+      !fallbackToOriginal ||
+      !bookmark ||
+      fallbackHandledRef.current
+    ) {
+      return;
     }
-  }, [bookmark, playAudio, speechParagraphs, status]);
+    fallbackHandledRef.current = true;
+    void getBookmarkPrivacy(bookmark.id).then((privacy) => {
+      if (privacy !== "public") {
+        return;
+      }
+      void rememberReaderFallbackDomain(bookmark.originalUrl);
+      void openExternalUrl(bookmark.originalUrl).then(() => {
+        if (Platform.OS === "android") {
+          ToastAndroid.show(
+            "Reader view unavailable — opened the original",
+            ToastAndroid.SHORT
+          );
+        }
+      });
+      router.back();
+    });
+  }, [bookmark, fallbackToOriginal, router]);
+
+  const startListening = useCallback(() => {
+    if (!bookmark) {
+      return;
+    }
+    playAudio({
+      id: bookmark.id,
+      title: bookmark.title,
+      paragraphs: speechParagraphs,
+    });
+  }, [bookmark, playAudio, speechParagraphs]);
 
   useEffect(() => {
     let active = true;
@@ -408,6 +531,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           ? Math.min(maxOffset, saved.offset)
           : saved.progress * maxOffset;
       scrollRef.current?.scrollTo({ y, animated: false });
+      scrollOffsetRef.current = y;
       setReadingProgress(saved.progress);
       restoredRef.current = true;
     }
@@ -490,6 +614,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       clearTimeout(saveTimer.current);
     }
     const offset = event.nativeEvent.contentOffset.y;
+    scrollOffsetRef.current = offset;
     latestProgress.current = {
       progress,
       offset,
@@ -893,6 +1018,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           >
             <Text
               selectable={!annotateMode}
+              accessibilityRole={block.type === "heading" ? "header" : undefined}
               onPress={
                 annotateMode
                   ? () => openAnnotationFor(annotationTarget)
@@ -968,7 +1094,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
                 <IconButton
                   icon="fullscreen"
                   label="Enter full-screen reading"
-                  onPress={() => setFullscreen(true)}
+                  onPress={toggleFullscreen}
                   color={palette.text}
                 />
                 <IconButton
@@ -1004,22 +1130,39 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         <View
           style={[
             styles.floatingTop,
-            { top: insets.top + spacing[2], right: spacing[4] },
+            {
+              top: insets.top + spacing[2],
+              right: spacing[4],
+              borderRadius: 24,
+              backgroundColor: palette.text,
+              elevation: 6,
+              shadowColor: "#000000",
+              shadowOpacity: 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 3 },
+            },
           ]}
         >
           <IconButton
             icon="fullscreen-exit"
             label="Exit full-screen reading"
-            onPress={() => setFullscreen(false)}
-            withBackground
-            color={palette.text}
-            inkColor={palette.text}
+            onPress={toggleFullscreen}
+            color={palette.background}
+            inkColor={palette.background}
           />
         </View>
       )}
 
       {status === "ready" ? (
         <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Reading progress"
+          accessibilityValue={{
+            min: 0,
+            max: 100,
+            now: Math.round(displayProgress * 100),
+          }}
           pointerEvents="none"
           style={[styles.progressTrack, { backgroundColor: palette.muted }]}
         >
@@ -1188,6 +1331,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         onAnnotate={() => {
           beginAnnotate();
         }}
+        onListen={startListening}
         onToggleCompleted={toggleCompleted}
         onJumpToTop={jumpToTop}
       />
@@ -1196,14 +1340,20 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         visible={settingsVisible}
         preferences={preferences}
         onClose={() => setSettingsVisible(false)}
-        onFontChange={setFont}
-        onFontSizeChange={setFontSize}
-        onLineHeightChange={setLineHeight}
-        onParagraphSpacingChange={setParagraphSpacing}
-        onWidthChange={setWidth}
-        onAlignChange={setAlign}
+        onFontChange={(font) => animateReaderLayout(() => setFont(font))}
+        onFontSizeChange={(size) => animateReaderLayout(() => setFontSize(size))}
+        onLineHeightChange={(heightValue) =>
+          animateReaderLayout(() => setLineHeight(heightValue))
+        }
+        onParagraphSpacingChange={(value) =>
+          animateReaderLayout(() => setParagraphSpacing(value))
+        }
+        onWidthChange={(value) => animateReaderLayout(() => setWidth(value))}
+        onAlignChange={(value) => animateReaderLayout(() => setAlign(value))}
         onBackgroundChange={setBackground}
-        onPaginateChange={setPaginate}
+        onPaginateChange={(value) =>
+          animateReaderLayout(() => setPaginate(value))
+        }
       />
 
       <ReaderAnnotationSheet

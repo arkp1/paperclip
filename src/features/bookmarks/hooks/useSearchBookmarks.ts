@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { searchPublicBookmarks } from "@/features/bookmarks/data/bookmarkRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
+import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -58,6 +59,21 @@ export function useSearchBookmarks(query: string) {
   const reload = useCallback(() => {
     setRefreshToken((token) => token + 1);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeReadingProgress((bookmarkId, progress) => {
+        setState((previous) => ({
+          ...previous,
+          results: previous.results.map((bookmark) =>
+            bookmark.id === bookmarkId
+              ? { ...bookmark, readingProgress: progress }
+              : bookmark
+          ),
+        }));
+      }),
+    []
+  );
 
   return { ...state, reload };
 }

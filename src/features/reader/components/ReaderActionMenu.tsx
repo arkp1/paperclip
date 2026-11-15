@@ -13,6 +13,7 @@ type ReaderActionMenuProps = {
   onMove: () => void;
   onSearch: () => void;
   onAnnotate: () => void;
+  onListen: () => void;
   onToggleCompleted: () => void;
   onJumpToTop: () => void;
 };
@@ -31,6 +32,7 @@ export function ReaderActionMenu({
   onMove,
   onSearch,
   onAnnotate,
+  onListen,
   onToggleCompleted,
   onJumpToTop,
 }: ReaderActionMenuProps) {
@@ -47,6 +49,7 @@ export function ReaderActionMenu({
     >
       <ActionRow icon="magnify" label="Search in article" onPress={() => run(onSearch)} />
       <ActionRow icon="format-color-fill" label="Highlight paragraph" onPress={() => run(onAnnotate)} />
+      <ActionRow icon="volume-high" label="Listen to article" onPress={() => run(onListen)} />
       <ActionRow icon="arrow-up" label="Jump to top" onPress={() => run(onJumpToTop)} />
       <ActionRow
         icon={completed ? "check-circle-outline" : "check-circle"}

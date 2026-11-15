@@ -30,6 +30,15 @@ export const styles = StyleSheet.create({
     paddingTop: spacing[3],
     gap: spacing[4],
   },
+  clipboardChip: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    borderRadius: 999,
+  },
   previewCard: {
     borderRadius: 24,
     borderWidth: StyleSheet.hairlineWidth,

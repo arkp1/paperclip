@@ -62,11 +62,30 @@ export const styles = StyleSheet.create({
   titleBlock: {
     minHeight: 40,
   },
-  favoriteBadge: {
+  moreButton: {
     position: "absolute",
-    right: spacing[2],
-    bottom: spacing[2],
-    zIndex: 2,
+    bottom: spacing[1],
+    right: spacing[1],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
+  },
+  progressTrack: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 2,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "rgba(120, 112, 130, 0.18)",
+    zIndex: 4,
+  },
+  progressFill: {
+    height: 2,
+    borderRadius: 1,
   },
   fallback: {
     flex: 1,

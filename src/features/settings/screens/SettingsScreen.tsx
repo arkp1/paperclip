@@ -25,6 +25,7 @@ import type { ThemeMode } from "@/theme/ThemeProvider";
 import { resetPrivateVault } from "@/core/database/privateVault";
 import { resetLegacyPrivateDataInPublicDatabase } from "@/core/database/vaultTransfers";
 import { lockPrivateSpace } from "@/core/security/privateSpaceSession";
+import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
 
 const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
   { label: "System", mode: "system" },
@@ -50,11 +51,20 @@ export function SettingsScreen() {
   const bottomInset = useFloatingNavigationInset();
   const version = Constants.expoConfig?.version ?? "1.0.0";
   const [segmentWidth, setSegmentWidth] = useState(0);
+  const [openLinks, setOpenLinks] = useState<"reader" | "browser">("reader");
   const selectedIndex = Math.max(
     0,
     THEME_OPTIONS.findIndex((option) => option.mode === mode),
   );
   const selection = useSharedValue(selectedIndex);
+
+  useEffect(() => {
+    void getSetting("reader_open_links")
+      .then((value) => {
+        setOpenLinks(value === "browser" ? "browser" : "reader");
+      })
+      .catch(() => setOpenLinks("reader"));
+  }, []);
 
   useEffect(() => {
     selection.value = withTiming(selectedIndex, {
@@ -291,6 +301,78 @@ export function SettingsScreen() {
                   ]}
                 />
               </MaterialHost>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <AppText variant="eyebrow" color={theme.colors.primary}>
+            Reading
+          </AppText>
+
+          <View
+            style={[
+              styles.group,
+              styles.themeGroup,
+              { borderColor: theme.colors.outlineVariant },
+            ]}
+          >
+            <View style={styles.themeCopy}>
+              <AppText variant="bodyLarge">Open links in</AppText>
+              <AppText
+                variant="bodySmall"
+                color={theme.colors.onSurfaceVariant}
+              >
+                Private links always open in the protected reader.
+              </AppText>
+            </View>
+
+            <View
+              style={[
+                styles.segmented,
+                {
+                  backgroundColor: theme.colors.surfaceContainer,
+                  borderColor: theme.colors.outlineVariant,
+                },
+              ]}
+            >
+              {(["reader", "browser"] as const).map((option) => {
+                const selected = openLinks === option;
+                return (
+                  <ScalePressable
+                    key={option}
+                    accessibilityRole="radio"
+                    accessibilityLabel={
+                      option === "reader" ? "Open in reader" : "Open in browser"
+                    }
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => {
+                      setOpenLinks(option);
+                      void setSetting("reader_open_links", option).catch(
+                        () => undefined
+                      );
+                    }}
+                    scaleTo={0.97}
+                    style={[
+                      styles.segment,
+                      selected
+                        ? { backgroundColor: theme.colors.primaryContainer }
+                        : null,
+                    ]}
+                  >
+                    <AppText
+                      variant="labelLarge"
+                      color={
+                        selected
+                          ? theme.colors.onPrimaryContainer
+                          : theme.colors.onSurfaceVariant
+                      }
+                    >
+                      {option === "reader" ? "Reader" : "Browser"}
+                    </AppText>
+                  </ScalePressable>
+                );
+              })}
             </View>
           </View>
         </View>

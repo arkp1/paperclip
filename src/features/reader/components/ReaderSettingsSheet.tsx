@@ -334,6 +334,7 @@ export function ReaderSettingsSheet({
             accessibilityLabel="Pagination"
             accessibilityState={{ checked: preferences.paginate }}
             onPress={() => onPaginateChange(!preferences.paginate)}
+            pressFeedback="none"
             style={styles.toggleRow}
           >
             <AppText variant="bodyMedium">Horizontal pages</AppText>

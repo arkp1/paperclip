@@ -22,6 +22,7 @@ export type Bookmark = {
   isFavorite: boolean;
   createdAt: number;
   updatedAt: number;
+  readingProgress?: number | null;
 };
 
 export type BookmarkView = Bookmark & {

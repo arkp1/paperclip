@@ -59,6 +59,7 @@ type BookmarkRow = {
   isFavorite: number;
   createdAt: number;
   updatedAt: number;
+  readingProgress: string | null;
 };
 
 type BookmarkListRow = BookmarkRow & {
@@ -94,6 +95,7 @@ SELECT
   b.is_favorite AS isFavorite,
   b.created_at AS createdAt,
   b.updated_at AS updatedAt,
+  (SELECT value FROM app_settings WHERE key = 'reader_progress:' || b.id) AS readingProgress,
   f.name AS folderName
 FROM bookmarks b
 LEFT JOIN folders f ON f.id = b.folder_id
@@ -103,6 +105,26 @@ function toPreviewStatus(value: string): PreviewStatus {
   return PREVIEW_STATUSES.includes(value as PreviewStatus)
     ? (value as PreviewStatus)
     : "pending";
+}
+
+function parseReadingProgress(raw: string | null): number | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof (parsed as { progress?: unknown }).progress === "number"
+    ) {
+      const progress = (parsed as { progress: number }).progress;
+      return Math.max(0, Math.min(1, progress));
+    }
+  } catch {
+    // Ignore malformed progress; the card simply omits the line.
+  }
+  return null;
 }
 
 function mapBookmarkRow(row: BookmarkRow): Bookmark {
@@ -123,6 +145,7 @@ function mapBookmarkRow(row: BookmarkRow): Bookmark {
     isFavorite: row.isFavorite === 1,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    readingProgress: parseReadingProgress(row.readingProgress),
   };
 }
 

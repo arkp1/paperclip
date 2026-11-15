@@ -42,10 +42,8 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
   const insets = useSafeAreaInsets();
   const audioInset = useReaderAudioInset();
   const { sortMode, setSortMode } = useBookmarkSortMode();
-  const { bookmarks, status, errorMessage, reload } = useCollectionBookmarks(
-    collection,
-    sortMode
-  );
+  const { bookmarks, total, loadingMore, status, errorMessage, reload, loadMore } =
+    useCollectionBookmarks(collection, sortMode);
   const [selectedBookmark, setSelectedBookmark] = useState<Bookmark | BookmarkView | null>(
     null
   );
@@ -77,7 +75,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
 
   const openBookmark = useCallback(
     (bookmark: Bookmark) => {
-      openBookmarkDestination(bookmark, router);
+      void openBookmarkDestination(bookmark, router);
     },
     [router]
   );
@@ -104,7 +102,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
   return (
     <Screen>
       <TopAppBar
-        title={title}
+        title={total > 0 ? `${title} · ${total}` : title}
         icon={collectionIcon}
         onBack={() => router.back()}
         actions={
@@ -141,6 +139,15 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
         windowSize={7}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews
+        onEndReached={() => {
+          void loadMore();
+        }}
+        onEndReachedThreshold={0.6}
+        ListFooterComponent={
+          loadingMore ? (
+            <LoadingState compact message="Loading more links…" />
+          ) : undefined
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

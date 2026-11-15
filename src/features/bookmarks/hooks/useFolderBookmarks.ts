@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listBookmarksInFolder } from "@/features/bookmarks/data/bookmarkRepository";
 import type { Bookmark, BookmarkSortMode } from "@/features/bookmarks/types";
 import { PrivateFolderLockedError } from "@/features/folders/errors";
+import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
 
 type FolderBookmarksState = {
   bookmarks: Bookmark[];
@@ -38,6 +39,21 @@ export function useFolderBookmarks(folderId: string, sortMode: BookmarkSortMode)
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(
+    () =>
+      subscribeReadingProgress((bookmarkId, progress) => {
+        setState((previous) => ({
+          ...previous,
+          bookmarks: previous.bookmarks.map((bookmark) =>
+            bookmark.id === bookmarkId
+              ? { ...bookmark, readingProgress: progress }
+              : bookmark
+          ),
+        }));
+      }),
+    []
+  );
 
   return { ...state, reload: load };
 }

@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Animated,
-  Easing,
   KeyboardAvoidingView,
   Modal,
   Pressable,
+  StyleSheet,
   View,
 } from "react-native";
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { AppText } from "@/shared/ui/AppText";
 import { styles } from "@/styles/shared/ui/AppDialog.styles";
-import { useTheme } from "@/theme";
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+import { motion, spacing, useTheme } from "@/theme";
 
 type AppDialogProps = {
   visible: boolean;
@@ -34,101 +39,129 @@ export function AppDialog({
 }: AppDialogProps) {
   const { theme } = useTheme();
   const { colors, shapes } = theme;
+  const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
-  const scale = useRef(new Animated.Value(1)).current;
+  const progress = useSharedValue(0);
   const [mounted, setMounted] = useState(visible);
   const visibleRef = useRef(visible);
-  visibleRef.current = visible;
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
 
   useEffect(() => {
     if (visible) {
-      if (!mounted) {
-        setMounted(true);
-        return;
-      }
-
+      setMounted(true);
       if (reduceMotion) {
-        scale.setValue(1);
+        progress.value = 1;
+        return;
+      }
+      progress.value = 0;
+      progress.value = withTiming(1, {
+        duration: motion.settingsIn,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+      });
+      return;
+    }
+
+    if (!visible) {
+      if (reduceMotion) {
+        progress.value = 0;
+        setMounted(false);
         return;
       }
 
-      scale.setValue(0.96);
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: 140,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-      return;
+      progress.value = withTiming(
+        0,
+        {
+          duration: motion.settingsOut,
+          easing: Easing.bezier(0.4, 0, 1, 1),
+        },
+        (finished) => {
+          if (finished && !visibleRef.current) {
+            runOnJS(setMounted)(false);
+          }
+        }
+      );
     }
+  }, [progress, reduceMotion, visible]);
 
-    if (!mounted) {
-      return;
-    }
-
-    if (reduceMotion) {
-      setMounted(false);
-      return;
-    }
-
-    Animated.timing(scale, {
-      toValue: 0.96,
-      duration: 100,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      if (!visibleRef.current) {
-        setMounted(false);
-      }
-    });
-  }, [mounted, reduceMotion, scale, visible]);
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [
+      { translateY: (1 - progress.value) * 12 },
+      { scale: 0.94 + progress.value * 0.06 },
+    ],
+  }));
 
   return (
     <Modal
       visible={mounted}
       transparent
-      animationType={reduceMotion ? "none" : "fade"}
+      animationType="none"
       statusBarTranslucent
       navigationBarTranslucent
       hardwareAccelerated
       onRequestClose={onRequestClose}
     >
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-        <Pressable
-          style={[styles.backdrop, { backgroundColor: colors.scrim }]}
-          onPress={onRequestClose}
-          accessibilityLabel="Close dialog"
-        >
-          <AnimatedPressable
+        <View style={styles.flex}>
+          <Animated.View
+            pointerEvents="none"
             style={[
-              styles.card,
+              StyleSheet.absoluteFill,
+              { backgroundColor: colors.scrim },
+              scrimStyle,
+            ]}
+          />
+          <Pressable
+            accessibilityLabel="Close dialog"
+            onPress={onRequestClose}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="box-none"
+            style={[
+              styles.backdrop,
               {
-                backgroundColor: colors.surfaceContainerLowest,
-                borderRadius: shapes.dialog,
-                transform: [{ scale }],
+                paddingTop: Math.max(insets.top, spacing[6]),
+                paddingBottom: Math.max(insets.bottom, spacing[6]),
               },
             ]}
-            accessibilityViewIsModal
-            onPress={() => {
-              // Prevent taps inside the dialog from dismissing it.
-            }}
           >
-            {title || description ? (
-              <View style={styles.header}>
-                {title ? <AppText variant="titleLarge">{title}</AppText> : null}
-                {description ? (
-                  <AppText variant="bodyMedium" color={colors.onSurfaceVariant}>
-                    {description}
-                  </AppText>
-                ) : null}
-              </View>
-            ) : null}
+            <Animated.View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surfaceContainerLowest,
+                  borderRadius: shapes.dialog,
+                },
+                cardStyle,
+              ]}
+              accessibilityViewIsModal
+            >
+              {title || description ? (
+                <View style={styles.header}>
+                  {title ? <AppText variant="titleLarge">{title}</AppText> : null}
+                  {description ? (
+                    <AppText
+                      variant="bodyMedium"
+                      color={colors.onSurfaceVariant}
+                    >
+                      {description}
+                    </AppText>
+                  ) : null}
+                </View>
+              ) : null}
 
-            {children ? <View style={styles.body}>{children}</View> : null}
+              {children ? <View style={styles.body}>{children}</View> : null}
 
-            <View style={styles.actions}>{actions}</View>
-          </AnimatedPressable>
-        </Pressable>
+              <View style={styles.actions}>{actions}</View>
+            </Animated.View>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
