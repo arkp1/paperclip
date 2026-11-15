@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { getDatabase } from "@/core/database/database";
 import { getPrivateVault } from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
-import { deletePreviewImage } from "@/core/files/previewFileStore";
+import { deletePreviewImage, tryDeletePreviewImage } from "@/core/files/previewFileStore";
 import {
   queuePendingCleanupFiles,
   removePendingCleanupFiles,
@@ -363,13 +363,17 @@ export async function movePublicFolderToVaultSafe(
   }
 
   // Remove plaintext assets only after the encrypted copies are durable.
+  const undeletedPreviewPaths: string[] = [];
   for (const bookmark of bookmarks) {
-    if (bookmark.previewImagePath) {
-      const file = new File(Paths.document, bookmark.previewImagePath);
-      if (file.exists) {
-        file.delete();
-      }
+    if (
+      bookmark.previewImagePath &&
+      !tryDeletePreviewImage(bookmark.previewImagePath)
+    ) {
+      undeletedPreviewPaths.push(bookmark.previewImagePath);
     }
+  }
+  if (undeletedPreviewPaths.length > 0) {
+    await queuePendingCleanupFiles(main, undeletedPreviewPaths);
   }
 
   await main.execAsync("PRAGMA secure_delete = ON;");
@@ -625,11 +629,11 @@ export async function movePublicBookmarkToVaultSafe(
       preview
     );
   });
-  if (bookmark.previewImagePath) {
-    const file = new File(Paths.document, bookmark.previewImagePath);
-    if (file.exists) {
-      file.delete();
-    }
+  if (
+    bookmark.previewImagePath &&
+    !tryDeletePreviewImage(bookmark.previewImagePath)
+  ) {
+    await queuePendingCleanupFiles(main, [bookmark.previewImagePath]);
   }
   await main.execAsync("PRAGMA secure_delete = ON;");
   await main.withTransactionAsync(async () => {
@@ -713,27 +717,31 @@ export async function recoverPendingTransfers(): Promise<void> {
       continue;
     }
     processedFolders.add(transfer.entityId);
-    if (transfer.target === "private") {
-      const publicFolder = await main.getFirstAsync<{ id: string }>(
-        "SELECT id FROM folders WHERE id = ? AND is_private = 0",
+    try {
+      if (transfer.target === "private") {
+        const publicFolder = await main.getFirstAsync<{ id: string }>(
+          "SELECT id FROM folders WHERE id = ? AND is_private = 0",
+          transfer.entityId
+        );
+        if (publicFolder) {
+          await movePublicFolderToVaultSafe(transfer.entityId);
+        } else {
+          await completeFolderTransfer(transfer.entityId);
+        }
+        continue;
+      }
+
+      const sourceFolder = await vault.getFirstAsync<{ id: string }>(
+        "SELECT id FROM folders WHERE id = ?",
         transfer.entityId
       );
-      if (publicFolder) {
-        await movePublicFolderToVaultSafe(transfer.entityId);
+      if (sourceFolder) {
+        await moveVaultFolderToPublicSafe(transfer.entityId);
       } else {
         await completeFolderTransfer(transfer.entityId);
       }
-      continue;
-    }
-
-    const sourceFolder = await vault.getFirstAsync<{ id: string }>(
-      "SELECT id FROM folders WHERE id = ?",
-      transfer.entityId
-    );
-    if (sourceFolder) {
-      await moveVaultFolderToPublicSafe(transfer.entityId);
-    } else {
-      await completeFolderTransfer(transfer.entityId);
+    } catch (error) {
+      console.warn("Skipping an unfinished folder transfer.", error);
     }
   }
 
@@ -746,35 +754,47 @@ export async function recoverPendingTransfers(): Promise<void> {
     }
 
     if (transfer.target === "private") {
-      const publicBookmark = await main.getFirstAsync<{ id: string }>(
+      try {
+        const publicBookmark = await main.getFirstAsync<{ id: string }>(
+          "SELECT id FROM bookmarks WHERE id = ?",
+          transfer.entityId
+        );
+        if (publicBookmark) {
+          if (!transfer.targetFolderId) {
+            console.warn(
+              "Dropping a private transfer marker without a destination folder."
+            );
+            await completeBookmarkTransfer(transfer.entityId);
+            continue;
+          }
+          await movePublicBookmarkToVaultSafe(
+            transfer.entityId,
+            transfer.targetFolderId
+          );
+        } else {
+          await completeBookmarkTransfer(transfer.entityId);
+        }
+      } catch (error) {
+        console.warn("Skipping an unfinished bookmark transfer.", error);
+      }
+      continue;
+    }
+
+    try {
+      const sourceBookmark = await vault.getFirstAsync<{ id: string }>(
         "SELECT id FROM bookmarks WHERE id = ?",
         transfer.entityId
       );
-      if (publicBookmark) {
-        if (!transfer.targetFolderId) {
-          throw new Error("A pending private bookmark has no destination folder.");
-        }
-        await movePublicBookmarkToVaultSafe(
+      if (sourceBookmark) {
+        await moveVaultBookmarkToPublicSafe(
           transfer.entityId,
           transfer.targetFolderId
         );
       } else {
         await completeBookmarkTransfer(transfer.entityId);
       }
-      continue;
-    }
-
-    const sourceBookmark = await vault.getFirstAsync<{ id: string }>(
-      "SELECT id FROM bookmarks WHERE id = ?",
-      transfer.entityId
-    );
-    if (sourceBookmark) {
-      await moveVaultBookmarkToPublicSafe(
-        transfer.entityId,
-        transfer.targetFolderId
-      );
-    } else {
-      await completeBookmarkTransfer(transfer.entityId);
+    } catch (error) {
+      console.warn("Skipping an unfinished bookmark transfer.", error);
     }
   }
 }
@@ -831,21 +851,22 @@ export async function resetLegacyPrivateDataInPublicDatabase(): Promise<void> {
       await clearAllTransfers();
     });
 
+    const undeletedPreviewPaths: string[] = [];
     for (const bookmark of privateBookmarks) {
-      if (bookmark.previewImagePath) {
-        try {
-          const file = new File(Paths.document, bookmark.previewImagePath);
-          if (file.exists) {
-            file.delete();
-          }
-        } catch (error) {
-          throw new Error(
-            `Could not remove a legacy private preview: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
+      if (
+        bookmark.previewImagePath &&
+        !tryDeletePreviewImage(bookmark.previewImagePath)
+      ) {
+        undeletedPreviewPaths.push(bookmark.previewImagePath);
       }
     }
-    await removePendingCleanupFiles(main, previewPaths);
+    if (undeletedPreviewPaths.length > 0) {
+      await queuePendingCleanupFiles(main, undeletedPreviewPaths);
+    }
+    await removePendingCleanupFiles(
+      main,
+      previewPaths.filter((path) => !undeletedPreviewPaths.includes(path))
+    );
     await Image.clearDiskCache().catch(() => undefined);
     await Image.clearMemoryCache().catch(() => undefined);
     await main.execAsync("PRAGMA wal_checkpoint(TRUNCATE);");
@@ -860,7 +881,14 @@ export async function migrateLegacyPrivateFoldersToVault(): Promise<void> {  con
   for (const folder of folders) {
     // Source remains marked private until the encrypted copy and assets are
     // durable, so an interrupted run is safely retried on the next unlock.
-    await movePublicFolderToVaultSafe(folder.id, true);
+    try {
+      await movePublicFolderToVaultSafe(folder.id, true);
+    } catch (error) {
+      console.warn(
+        "Skipping a legacy private folder that could not be migrated.",
+        error
+      );
+    }
   }
   if (folders.length > 0) {
     await Image.clearDiskCache().catch(() => undefined);
@@ -917,13 +945,17 @@ export async function deleteVaultFolderSafe(
     await main.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
     await main.runAsync("DELETE FROM folders WHERE id = ?", id);
   });
+  const undeletedPreviewPaths: string[] = [];
   for (const bookmark of publicBookmarks) {
-    if (bookmark.previewImagePath) {
-      const file = new File(Paths.document, bookmark.previewImagePath);
-      if (file.exists) {
-        file.delete();
-      }
+    if (
+      bookmark.previewImagePath &&
+      !tryDeletePreviewImage(bookmark.previewImagePath)
+    ) {
+      undeletedPreviewPaths.push(bookmark.previewImagePath);
     }
+  }
+  if (undeletedPreviewPaths.length > 0) {
+    await queuePendingCleanupFiles(main, undeletedPreviewPaths);
   }
 
   await vault.withTransactionAsync(async () => {

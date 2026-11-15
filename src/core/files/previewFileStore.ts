@@ -145,9 +145,9 @@ export async function cachePreviewImage(
   return writePreviewImageBytes(bookmarkId, downloaded);
 }
 
-export function deletePreviewImage(relativePath: string | null): void {
+export function tryDeletePreviewImage(relativePath: string | null): boolean {
   if (!relativePath) {
-    return;
+    return true;
   }
 
   try {
@@ -155,7 +155,13 @@ export function deletePreviewImage(relativePath: string | null): void {
     if (file.exists) {
       file.delete();
     }
+    return true;
   } catch (error) {
     console.warn("Could not remove a preview image.", error);
+    return false;
   }
+}
+
+export function deletePreviewImage(relativePath: string | null): void {
+  tryDeletePreviewImage(relativePath);
 }
