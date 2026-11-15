@@ -15,6 +15,7 @@ import {
 import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import { PUBLIC_FOLDER_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
+import { PUBLIC_BOOKMARK_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -61,7 +62,9 @@ SELECT
   f.updated_at AS updatedAt,
   CASE WHEN f.is_private = 1 THEN NULL ELSE COUNT(b.id) END AS bookmarkCount
 FROM folders f
-LEFT JOIN bookmarks b ON b.folder_id = f.id
+LEFT JOIN bookmarks b
+  ON b.folder_id = f.id
+ AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
 `;
 
 function mapFolderRow(row: FolderRow): Folder {
