@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BackHandler,
   Pressable,
   ScrollView,
+  StyleSheet,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -18,7 +19,7 @@ import Animated, {
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { styles } from "@/styles/shared/ui/OverflowMenu.styles";
-import { useTheme } from "@/theme";
+import { motion, useTheme } from "@/theme";
 
 type OverflowMenuProps = {
   visible: boolean;
@@ -27,8 +28,6 @@ type OverflowMenuProps = {
   children: ReactNode;
 };
 
-const OPEN_DURATION = 200;
-const CLOSE_DURATION = 120;
 const MENU_WIDTH = 236;
 
 /**
@@ -46,12 +45,16 @@ export function OverflowMenu({
   const { width, height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const [rendered, setRendered] = useState(visible);
+  const visibleRef = useRef(visible);
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
   const progress = useSharedValue(visible ? 1 : 0);
 
   useEffect(() => {
     if (reduceMotion) {
-      setRendered(visible);
       progress.value = visible ? 1 : 0;
+      setRendered(visible);
       return;
     }
 
@@ -59,7 +62,7 @@ export function OverflowMenu({
       setRendered(true);
       progress.value = 0;
       progress.value = withTiming(1, {
-        duration: OPEN_DURATION,
+        duration: motion.menuIn,
         easing: Easing.bezier(0.2, 0, 0, 1),
       });
       return;
@@ -68,11 +71,11 @@ export function OverflowMenu({
     progress.value = withTiming(
       0,
       {
-        duration: CLOSE_DURATION,
-        easing: Easing.bezier(0.3, 0, 1, 1),
+        duration: motion.menuOut,
+        easing: Easing.bezier(0.4, 0, 1, 1),
       },
       (finished) => {
-        if (finished) {
+        if (finished && !visibleRef.current) {
           runOnJS(setRendered)(false);
         }
       }
@@ -92,7 +95,13 @@ export function OverflowMenu({
 
   const surfaceStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ scale: 0.85 + progress.value * 0.15 }],
+    transform: [
+      { translateY: (1 - progress.value) * 4 },
+      { scale: 0.9 + progress.value * 0.1 },
+    ],
+  }));
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
   }));
 
   if (!rendered) {
@@ -113,8 +122,16 @@ export function OverflowMenu({
 
   return (
     <View style={styles.root}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.scrim,
+          { backgroundColor: theme.colors.scrim },
+          scrimStyle,
+        ]}
+      />
       <Pressable
-        style={styles.scrim}
+        style={StyleSheet.absoluteFill}
         onPress={onClose}
         accessibilityLabel="Dismiss menu"
       />

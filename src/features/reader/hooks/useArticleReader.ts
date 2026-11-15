@@ -14,6 +14,7 @@ type ReaderState = {
   wordCount: number;
   status: "loading" | "ready" | "not_found" | "error";
   errorMessage: string | null;
+  fallbackToOriginal: boolean;
 };
 
 /**
@@ -27,6 +28,7 @@ export function useArticleReader(bookmarkId: string) {
     wordCount: 0,
     status: "loading",
     errorMessage: null,
+    fallbackToOriginal: false,
   });
   const generation = useRef(0);
 
@@ -39,6 +41,7 @@ export function useArticleReader(bookmarkId: string) {
       wordCount: 0,
       status: "loading",
       errorMessage: null,
+      fallbackToOriginal: false,
     });
 
     let loadedBookmark: Bookmark | null = null;
@@ -56,6 +59,7 @@ export function useArticleReader(bookmarkId: string) {
           wordCount: 0,
           status: "not_found",
           errorMessage: null,
+          fallbackToOriginal: false,
         });
         return;
       }
@@ -71,6 +75,7 @@ export function useArticleReader(bookmarkId: string) {
         wordCount: article.wordCount,
         status: "ready",
         errorMessage: null,
+        fallbackToOriginal: false,
       });
     } catch (error) {
       if (run !== generation.current) {
@@ -83,6 +88,9 @@ export function useArticleReader(bookmarkId: string) {
         status: "error",
         errorMessage:
           "This article could not be prepared. Open the original or try refreshing the link.",
+        fallbackToOriginal:
+          error instanceof Error &&
+          /No readable article text|not an article page/i.test(error.message),
       }));
     }
   }, [bookmarkId]);

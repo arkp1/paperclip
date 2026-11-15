@@ -16,6 +16,8 @@ export type AppSettingKey =
   | "reader_align"
   | "reader_background"
   | "reader_paginate"
+  | "reader_open_links"
+  | "reader_browser_domains"
   | `reader_progress:${string}`
   | `reader_annotations:${string}`;
 

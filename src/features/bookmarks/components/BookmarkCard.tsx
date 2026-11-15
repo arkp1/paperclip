@@ -15,6 +15,7 @@ type BookmarkCardProps = {
   variant?: "grid" | "list" | "cards";
   onPress: (bookmark: Bookmark | BookmarkView) => void;
   onLongPress?: (bookmark: Bookmark | BookmarkView) => void;
+  onMorePress?: (bookmark: Bookmark | BookmarkView) => void;
 };
 
 function BookmarkCardComponent({
@@ -22,10 +23,12 @@ function BookmarkCardComponent({
   variant = "grid",
   onPress,
   onLongPress,
+  onMorePress,
 }: BookmarkCardProps) {
   const { theme } = useTheme();
   const domain = getDisplayDomain(bookmark);
   const folderName = "folderName" in bookmark ? bookmark.folderName : null;
+  const readingProgress = bookmark.readingProgress ?? null;
   const lastLongPressAt = useRef(0);
 
   const handlePress = () => {
@@ -40,13 +43,31 @@ function BookmarkCardComponent({
     onLongPress?.(bookmark);
   };
 
+  const openActions = () => {
+    lastLongPressAt.current = Date.now();
+    (onMorePress ?? onLongPress)?.(bookmark);
+  };
+
   return (
     <ScalePressable
       accessibilityRole="button"
       accessibilityLabel={`${bookmark.title}. ${domain}.${
         bookmark.isFavorite ? " Favourite." : ""
       }`}
-      accessibilityHint="Opens the saved link. Long press for actions."
+      accessibilityHint="Opens the saved link. Use More actions for options."
+      accessibilityActions={[
+        { name: "activate", label: "Open" },
+        { name: "more", label: "More actions" },
+      ]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === "more") {
+          openActions();
+          return;
+        }
+        if (event.nativeEvent.actionName === "activate") {
+          onPress(bookmark);
+        }
+      }}
       onPress={handlePress}
       onLongPress={handleLongPress}
       delayLongPress={350}
@@ -98,14 +119,40 @@ function BookmarkCardComponent({
         </View>
       </View>
 
-      {bookmark.isFavorite ? (
-        <View
-          style={styles.favoriteBadge}
-          accessible={false}
-          importantForAccessibility="no-hide-descendants"
-        >
-          <MaterialCommunityIcons name="heart" size={16} color={theme.colors.primary} />
+      {readingProgress !== null && readingProgress > 0 ? (
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.round(readingProgress * 100)}%`,
+                backgroundColor: theme.colors.primary,
+              },
+            ]}
+          />
         </View>
+      ) : null}
+
+      {onLongPress || onMorePress ? (
+        <ScalePressable
+          accessibilityRole="button"
+          accessibilityLabel={`More actions for ${bookmark.title}`}
+          onPress={openActions}
+          hitSlop={8}
+          scaleTo={0.9}
+          style={[
+            styles.moreButton,
+            {
+              backgroundColor: theme.colors.surface,
+            },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="dots-vertical"
+            size={18}
+            color={theme.colors.onSurfaceVariant}
+          />
+        </ScalePressable>
       ) : null}
     </ScalePressable>
   );

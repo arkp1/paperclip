@@ -142,7 +142,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
 
   const openBookmark = useCallback(
     (bookmark: Bookmark) => {
-      openBookmarkDestination(bookmark, router);
+      void openBookmarkDestination(bookmark, router);
     },
     [router]
   );

@@ -10,17 +10,20 @@ the source of truth and the library works offline.
 
 ## Screenshots
 
-Runtime screenshots have not been captured automatically because the app
-requires a native development build and a connected Android device. The images
-below are the Figma design references kept in this repository; they are not
-current runtime captures.
+Runtime screenshots from the Android development build, in app order:
 
 <table>
   <tr>
-    <td><img src="docs/figma/01%20%E2%80%94%20Library.png" width="240" alt="Library design reference" /></td>
-    <td><img src="docs/figma/03%20%E2%80%94%20Folder%20detail.png" width="240" alt="Folder detail design reference" /></td>
-    <td><img src="docs/figma/08%20%E2%80%94%20Settings.png" width="240" alt="Settings design reference" /></td>
-    <td><img src="docs/figma/10%20%E2%80%94%20Dark%20theme.png" width="240" alt="Dark theme design reference" /></td>
+    <td><img src="docs/screenshots/home.jpg" width="220" alt="Home screen with search, recent folders, and recently saved links" /></td>
+    <td><img src="docs/screenshots/folders.jpg" width="220" alt="Folders screen with collections and user folders" /></td>
+    <td><img src="docs/screenshots/reader.jpg" width="220" alt="Distraction-free reader with serif typography" /></td>
+    <td><img src="docs/screenshots/settings.jpg" width="220" alt="Settings screen with appearance and privacy controls" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Home</sub></td>
+    <td align="center"><sub>Folders</sub></td>
+    <td align="center"><sub>Reader</sub></td>
+    <td align="center"><sub>Settings</sub></td>
   </tr>
 </table>
 
@@ -28,45 +31,61 @@ current runtime captures.
 
 ### Library and organization
 - Three primary destinations: **Home**, **Folders**, and **Settings**.
-- Home shows recent folders and a four-item Recently saved preview.
+- Home shows a search entry, recent folders, and a four-item Recently saved
+  preview.
 - Folders is the full library: All bookmarks, Favourites, Uncategorized, and
   user-created folders.
 - Grid, list, and card bookmark layouts with persisted sort order.
+- Incremental bookmark loading with visible collection counts, so large
+  libraries remain reachable beyond the first page.
 - Search across titles, URLs, domains, descriptions, notes, and folder names.
-- Visual preview cards with locally cached preview images and designed
-  fallbacks.
+- Visual preview cards with locally cached preview images, designed fallbacks,
+  a visible actions menu, TalkBack custom actions, and a thin reading-progress
+  indicator.
 - Folder colours, rename, safe deletion options, and recents ordering.
+- Home, collection, folder, and search cards update reading progress
+  immediately after the reader saves it.
 
 ### Capture and previews
 - Android Sharesheet integration with **Save** and **Quick save** actions.
-- Manual URL save flow with validation, optional notes, folder selection, and
-  duplicate handling.
+- Manual URL save flow with validation, optional notes, folder selection,
+  duplicate hints and an Open existing action, clipboard paste assistance, and
+  non-blocking preview enrichment.
 - YouTube oEmbed and Reddit social-card metadata fallbacks for sites that block
   generic metadata requests.
 - Preview images cached in app-managed storage and refreshed with bounded retry
   behaviour.
 
 ### Reading and listening
-- Article-like links open in the in-app reader; social, video, and media links
-  open externally.
+- Article-like links open in the in-app reader by default; the Settings screen
+  can switch public links to the browser. Links that cannot be extracted open
+  their original page automatically, and failing domains are remembered.
+- Private links always open in the protected reader.
 - Cached article text for offline reading.
 - Article images, including lazy `data-src`, `data-original`, and `srcset`
   sources. Small social icons are filtered out.
-- Reader controls for typeface, text size, white/sepia/grey/black page colours,
-  and optional horizontal pagination.
+- Reader controls for Google Sans Flex, Noto Serif, and JetBrains Mono
+  typefaces, text size, white/sepia/grey/black page colours, and optional
+  horizontal pagination.
+- Immersive full-screen mode with animated toolbar/content transitions and
+  preserved reading position.
+- Animated reading-settings and overflow menus with reduced-motion support.
 - A persistent listening player with play/pause, previous/next section,
-  draggable seeking, and 0.75×–1.5× speech speeds.
+  draggable seeking, and 0.75×–1.5× speech speeds. It appears only after
+  choosing **Listen to article**.
 - Playback continues while navigating outside the reader. The mini player can
   be reopened or closed with the X button.
 
 ### Appearance and interaction
 - Paperclip light and dark themes, five accent palettes, and AMOLED black.
 - Android 12+ dynamic colour for native Material controls when enabled.
-- Google Sans Flex typography for the app and reader.
+- Google Sans Flex typography for the app, with bundled Noto Serif and
+  JetBrains Mono families for the reader.
 - Material 3 Expressive-inspired controls, shapes, and Reanimated interaction
   feedback.
-- Radial-ink press feedback clipped to each control, plus scale feedback only
-  for the theme selector.
+- Reinforced light, dark, and AMOLED outline and surface contrast tokens.
+- 48dp navigation targets, accessible heading roles, and progress values for
+  TalkBack.
 
 ### Privacy and data
 - Private folders gated by biometrics or device PIN.
@@ -86,12 +105,15 @@ current runtime captures.
 - React Native Reanimated for interaction and reader motion
 - `expo-share-intent`, `expo-local-authentication`, `expo-speech`,
   `expo-file-system`, and `expo-image`
-- Google Sans Flex variable font, licensed under the SIL Open Font License
-  ([license](assets/fonts/OFL.txt))
+- Google Sans Flex, Noto Serif, and JetBrains Mono variable fonts, licensed
+  under the SIL Open Font License
+  ([Google Sans Flex](assets/fonts/OFL.txt),
+  [Noto Serif](assets/fonts/NotoSerif-OFL.txt),
+  [JetBrains Mono](assets/fonts/JetBrainsMono-OFL.txt))
 
 ## Run it
 
-Prerequisites: Node.js, npm, and an Android device with the Paperclip
+Prerequisites: Node.js 22+, npm, and an Android device with the Paperclip
 development build installed.
 
 ```bash

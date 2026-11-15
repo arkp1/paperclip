@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Image } from "expo-image";
+import * as Clipboard from "expo-clipboard";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +24,7 @@ import {
   fetchLinkMetadata,
   type LinkMetadata,
 } from "@/features/save-link/services/metadataService";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -67,8 +69,15 @@ export function SaveLinkScreen() {
   const [metadataStatus, setMetadataStatus] = useState<
     "idle" | "loading" | "ready" | "unavailable"
   >("idle");
-  const [titleVersion, setTitleVersion] = useState(0);
+  const [clipboardHasText, setClipboardHasText] = useState(false);
+  const [duplicateHint, setDuplicateHint] = useState<Bookmark | null>(null);
   const titleEditedRef = useRef(false);
+
+  useEffect(() => {
+    void Clipboard.hasStringAsync()
+      .then(setClipboardHasText)
+      .catch(() => setClipboardHasText(false));
+  }, []);
 
   useEffect(() => {
     if (!sharedUrlParam || handledSharedUrl.current === sharedUrlParam) {
@@ -91,20 +100,11 @@ export function SaveLinkScreen() {
     if (!validation.valid) {
       setMetadata(null);
       setMetadataStatus("idle");
-      if (!titleEditedRef.current) {
-        setTitle("");
-        setTitleVersion((version) => version + 1);
-      }
       return;
     }
 
     let cancelled = false;
     setMetadataStatus("loading");
-
-    if (!titleEditedRef.current) {
-      setTitle("");
-      setTitleVersion((version) => version + 1);
-    }
 
     const timer = setTimeout(() => {
       void fetchLinkMetadata(validation.url)
@@ -118,7 +118,6 @@ export function SaveLinkScreen() {
 
           if (!titleEditedRef.current) {
             setTitle(result.title ?? validation.domain);
-            setTitleVersion((version) => version + 1);
           }
         })
         .catch(() => {
@@ -137,6 +136,28 @@ export function SaveLinkScreen() {
 
   const parsedUrl = validateHttpUrl(url);
   const previewDomain = parsedUrl.valid ? parsedUrl.domain : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    setDuplicateHint(null);
+    if (!parsedUrl.valid) {
+      return;
+    }
+    const targetUrl = parsedUrl.url;
+    const timer = setTimeout(() => {
+      void findBookmarkByUrl(targetUrl)
+        .then((existing) => {
+          if (!cancelled) {
+            setDuplicateHint(existing);
+          }
+        })
+        .catch(() => undefined);
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [parsedUrl.valid, url]);
   const previewTitle = title.trim() || previewDomain || "Your saved link";
   const previewTint = folderColors[pickFolderColorKey(previewDomain ?? url)];
   const selectedFolder = folders.find((folder) => folder.id === folderId);
@@ -183,7 +204,7 @@ export function SaveLinkScreen() {
         previewStatus: previewStatusFor(metadataStatus, metadata),
       });
 
-      await enrichBookmarkPreview(saved.id, metadata?.imageUrl ?? null);
+      void enrichBookmarkPreview(saved.id, metadata?.imageUrl ?? null);
       void cacheArticleInBackground(saved.id);
 
       if (folderId) {
@@ -293,13 +314,63 @@ export function SaveLinkScreen() {
               }
             }}
             placeholder="https://example.com/article"
-            autoFocus
+            autoFocus={!sharedUrlParam}
             keyboardType="uri"
             error={urlError}
           />
 
+          {clipboardHasText && !url ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="Paste link from clipboard"
+              onPress={() => {
+                void Clipboard.getStringAsync()
+                  .then((text) => {
+                    const validation = validateHttpUrl(text.trim());
+                    if (!validation.valid) {
+                      setUrlError("The clipboard does not contain a valid link.");
+                      return;
+                    }
+                    setUrl(validation.url);
+                    setUrlError(null);
+                  })
+                  .catch(() =>
+                    setUrlError("The clipboard could not be read.")
+                  );
+              }}
+              scaleTo={0.99}
+              style={[
+                styles.clipboardChip,
+                {
+                  backgroundColor: theme.colors.primaryContainer,
+                },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="content-paste"
+                size={18}
+                color={theme.colors.onPrimaryContainer}
+              />
+              <AppText
+                variant="labelLarge"
+                color={theme.colors.onPrimaryContainer}
+              >
+                Paste link from clipboard
+              </AppText>
+            </ScalePressable>
+          ) : null}
+
+          {duplicateHint ? (
+            <AppText
+              variant="bodySmall"
+              color={theme.colors.primary}
+              accessibilityLiveRegion="polite"
+            >
+              Already saved as “{duplicateHint.title}”.
+            </AppText>
+          ) : null}
+
           <TextField
-            key={`title-${titleVersion}`}
             label="Title (optional)"
             value={title}
             onChangeText={(value) => {
@@ -394,6 +465,18 @@ export function SaveLinkScreen() {
         }
         actions={
           <>
+            <Button
+              label="Open existing"
+              variant="tonal"
+              onPress={() => {
+                if (!duplicate) {
+                  return;
+                }
+                const existing = duplicate;
+                setDuplicate(null);
+                void openBookmarkDestination(existing, router);
+              }}
+            />
             <Button
               label="Save another copy"
               variant="tonal"
