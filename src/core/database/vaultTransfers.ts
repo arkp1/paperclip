@@ -874,6 +874,17 @@ export async function deleteVaultFolderSafe(
 ): Promise<void> {
   const vault = await getPrivateVault();
   const main = await getDatabase();
+  const inboundTransfers = await main.getAllAsync<{ id: string }>(
+    `SELECT t.entity_id AS id
+     FROM vault_transfers t
+     JOIN bookmarks b ON b.id = t.entity_id
+     WHERE t.entity_type = 'bookmark'
+       AND t.target = 'private'
+       AND t.target_folder_id = ?
+       AND b.folder_id IS NOT ?`,
+    id,
+    id
+  );
   const publicBookmarks = await main.getAllAsync<
     PublicBookmarkRow & { previewImagePath: string | null }
   >(
@@ -972,5 +983,8 @@ export async function deleteVaultFolderSafe(
     }
     await vault.runAsync("DELETE FROM folders WHERE id = ?", id);
   });
+  for (const transfer of inboundTransfers) {
+    await completeBookmarkTransfer(transfer.id);
+  }
   await completeFolderTransfer(id);
 }

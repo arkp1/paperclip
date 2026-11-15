@@ -1,12 +1,13 @@
 import * as SQLite from "expo-sqlite";
 import * as SecureStore from "expo-secure-store";
 import * as Crypto from "expo-crypto";
-import { File, Paths } from "expo-file-system";
+import { File, FileMode, Paths } from "expo-file-system";
 
 const VAULT_DATABASE = "paperclip-private.db";
 const VAULT_KEY_NAME = "paperclip.private.vault.key.v1";
 
 let vaultPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let keyPromise: Promise<{ key: string; created: boolean }> | null = null;
 let sessionAuthorized = false;
 let sessionVisible = false;
 let sessionGeneration = 0;
@@ -71,7 +72,7 @@ function bytesToHex(bytes: Uint8Array): string {
   );
 }
 
-async function getOrCreateKey(): Promise<{ key: string; created: boolean }> {
+async function loadOrCreateKey(): Promise<{ key: string; created: boolean }> {
   const existing = await SecureStore.getItemAsync(VAULT_KEY_NAME);
   if (existing) {
     return { key: existing, created: false };
@@ -80,6 +81,16 @@ async function getOrCreateKey(): Promise<{ key: string; created: boolean }> {
   const key = bytesToHex(bytes);
   await SecureStore.setItemAsync(VAULT_KEY_NAME, key);
   return { key, created: true };
+}
+
+function getOrCreateKey(): Promise<{ key: string; created: boolean }> {
+  if (!keyPromise) {
+    keyPromise = loadOrCreateKey().catch((error: unknown) => {
+      keyPromise = null;
+      throw error;
+    });
+  }
+  return keyPromise;
 }
 
 function deleteVaultFiles(): void {
@@ -112,16 +123,18 @@ async function assertVaultFileIsEncrypted(
   if (!file.exists) {
     throw new Error("The private vault file does not exist.");
   }
-  const header = (await file.bytes()).slice(0, 16);
-  const plaintextHeader = [
-    0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61,
-    0x74, 0x20, 0x33, 0x00,
-  ];
-  const looksLikePlainSqlite = plaintextHeader.every(
-    (byte, index) => header[index] === byte
-  );
-  if (looksLikePlainSqlite) {
-    throw new Error("The private vault file was not encrypted.");
+  const handle = file.open(FileMode.ReadOnly);
+  try {
+    const header = await handle.readBytes(16);
+    const plaintextHeader = [
+      0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61,
+      0x74, 0x20, 0x33, 0x00,
+    ];
+    if (plaintextHeader.every((byte, index) => header[index] === byte)) {
+      throw new Error("The private vault file was not encrypted.");
+    }
+  } finally {
+    handle.close();
   }
 }
 
@@ -163,9 +176,10 @@ async function openEncryptedVault(key: string): Promise<SQLite.SQLiteDatabase> {
 }
 
 async function openAndPrepareVault(): Promise<SQLite.SQLiteDatabase> {
+  const isKeyCreator = keyPromise === null;
   const { key, created } = await getOrCreateKey();
   const vaultFile = new File(Paths.document, "SQLite", VAULT_DATABASE);
-  if (created && vaultFile.exists) {
+  if (isKeyCreator && created && vaultFile.exists) {
     throw new Error(
       "The private vault key is missing, but the encrypted vault still exists. Restore the SecureStore key or explicitly reset the private vault."
     );
@@ -252,6 +266,7 @@ export async function closePrivateVault(): Promise<void> {
 export async function resetPrivateVault(): Promise<void> {
   await closePrivateVault();
   deleteVaultFiles();
+  keyPromise = null;
   await SecureStore.deleteItemAsync(VAULT_KEY_NAME).catch(() => undefined);
 }
 

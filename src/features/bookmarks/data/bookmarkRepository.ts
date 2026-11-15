@@ -12,7 +12,11 @@ import {
   updateVaultBookmarkContent,
   updateVaultBookmarkFavorite,
 } from "@/core/database/privateVaultRepository";
-import { isPrivateVaultOpen } from "@/core/database/privateVault";
+import {
+  getPrivateVaultGeneration,
+  isPrivateVaultGenerationCurrent,
+  isPrivateVaultOpen,
+} from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import {
@@ -199,18 +203,16 @@ export async function getPublicBookmarkById(
 export async function getReadableBookmarkById(
   id: string
 ): Promise<Bookmark | null> {
+  const generation = getPrivateVaultGeneration();
+  const wasOpen = isPrivateVaultOpen();
   const bookmark = await getBookmarkById(id);
   if (!bookmark) {
     return null;
   }
 
   if (bookmark.folderId) {
-    const wasUnlocked = isPrivateSpaceUnlocked();
     if (await isVaultFolder(bookmark.folderId)) {
       return isPrivateSpaceUnlocked() ? bookmark : null;
-    }
-    if (wasUnlocked && !isPrivateSpaceUnlocked()) {
-      return null;
     }
     const database = await getDatabase();
     const folder = await database.getFirstAsync<{ isPrivate: number }>(
@@ -222,6 +224,9 @@ export async function getReadableBookmarkById(
     }
   }
 
+  if (wasOpen && !isPrivateVaultGenerationCurrent(generation)) {
+    return null;
+  }
   return bookmark;
 }
 
@@ -540,6 +545,7 @@ export async function updateBookmarkMetadata(
 
 export async function deleteBookmark(id: string): Promise<void> {
   return withPrivacyWriteLock(async () => {
+    const generation = getPrivateVaultGeneration();
     const privacy = await getBookmarkPrivacy(id);
     if (privacy === "unavailable") {
       throw new Error("The private vault is locked.");
@@ -570,6 +576,12 @@ export async function deleteBookmark(id: string): Promise<void> {
       await deleteVaultBookmark(id);
     } else if (!publicRow) {
       throw new Error("This bookmark no longer exists.");
+    }
+
+    if (privacy === "private" && !isPrivateVaultGenerationCurrent(generation)) {
+      throw new Error(
+        "The private session ended during deletion. The deletion is incomplete; retry after unlocking."
+      );
     }
 
     await completeBookmarkTransfer(id);

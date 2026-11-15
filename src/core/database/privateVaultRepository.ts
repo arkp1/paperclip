@@ -28,7 +28,7 @@ import {
   moveVaultBookmarkToPublicSafe,
   moveVaultFolderToPublicSafe,
 } from "@/core/database/vaultTransfers";
-import { getBookmarkTransfer } from "@/core/database/vaultTransferState";
+import { getBookmarkTransfer, isFolderPendingPrivate } from "@/core/database/vaultTransferState";
 
 type FolderRow = {
   id: string;
@@ -463,14 +463,23 @@ export async function getBookmarkPrivacy(
       return "private";
     }
   }
-  const publicRow = await main.getFirstAsync<{ isPrivate: number }>(
-    `SELECT COALESCE(f.is_private, 0) AS isPrivate
+  const publicRow = await main.getFirstAsync<{
+    isPrivate: number;
+    folderId: string | null;
+  }>(
+    `SELECT COALESCE(f.is_private, 0) AS isPrivate, b.folder_id AS folderId
      FROM bookmarks b
      LEFT JOIN folders f ON f.id = b.folder_id
      WHERE b.id = ?`,
     id
   );
   if (!publicRow) {
+    return "unavailable";
+  }
+  if (
+    publicRow.folderId &&
+    (await isFolderPendingPrivate(publicRow.folderId))
+  ) {
     return "unavailable";
   }
   // A legacy private row still in the public DB is not a safe public result;
