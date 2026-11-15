@@ -121,10 +121,12 @@ back.
 
 ```bash
 npx tsc --noEmit
+npm run test:vault
 ```
 
-The Android bundle is compiled by Metro. ESLint configuration remains minimal
-and the repository does not yet have an automated unit/component test suite.
+The Android bundle is compiled by Metro. The vault regression suite uses Node's
+built-in SQLite support to verify transfer ownership, restart, reset, and newer
+destination-edit behavior. It does not replace on-device SQLCipher testing.
 
 ## Architecture
 
