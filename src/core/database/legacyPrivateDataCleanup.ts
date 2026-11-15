@@ -38,8 +38,7 @@ async function readPendingCleanup(
 async function savePendingCleanup(
   main: SQLiteDatabase,
   pending: PendingCleanup
-): Promise<void> {
-  if (pending.files.length === 0 && pending.settings.length === 0) {
+): Promise<void> {  if (pending.files.length === 0 && pending.settings.length === 0) {
     await main.runAsync(
       "DELETE FROM app_settings WHERE key = ?",
       PENDING_CLEANUP_KEY
@@ -54,6 +53,25 @@ async function savePendingCleanup(
     JSON.stringify(pending),
     Date.now()
   );
+}
+
+export async function queuePendingCleanupFiles(
+  main: SQLiteDatabase,
+  files: string[]
+): Promise<void> {
+  const pending = await readPendingCleanup(main);
+  pending.files = Array.from(new Set([...pending.files, ...files]));
+  await savePendingCleanup(main, pending);
+}
+
+export async function removePendingCleanupFiles(
+  main: SQLiteDatabase,
+  files: string[]
+): Promise<void> {
+  const pending = await readPendingCleanup(main);
+  const removed = new Set(files);
+  pending.files = pending.files.filter((path) => !removed.has(path));
+  await savePendingCleanup(main, pending);
 }
 
 /**

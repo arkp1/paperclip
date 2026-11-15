@@ -115,6 +115,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     "loading" | "ready" | "error"
   >("loading");
   const [annotationsReloadToken, setAnnotationsReloadToken] = useState(0);
+  const [annotationWritePending, setAnnotationWritePending] = useState(false);
+  const annotationWriteRef = useRef(false);
   const [annotationKey, setAnnotationKey] = useState<string | null>(null);
   const [annotationVisible, setAnnotationVisible] = useState(false);
   const [viewerImage, setViewerImage] = useState<{
@@ -124,6 +126,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const [readingProgress, setReadingProgress] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [progressHydrated, setProgressHydrated] = useState(false);
+  const [progressReloadToken, setProgressReloadToken] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -193,7 +196,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             preferences.fontSize,
             Math.max(220, contentWidth),
             height,
-            preferences.lineHeight
+            preferences.lineHeight,
+            preferences.paragraphSpacing
           )
         : [],
     [
@@ -201,6 +205,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       contentWidth,
       preferences.fontSize,
       preferences.lineHeight,
+      preferences.paragraphSpacing,
       height,
       preferences.paginate,
     ]
@@ -335,15 +340,27 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         setCompleted(progress.completed);
         setProgressHydrated(true);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        console.warn("Could not load reading progress.", error);
         if (active) {
           setProgressHydrated(true);
+          Alert.alert(
+            "Reading position unavailable",
+            "Your saved position could not be loaded. Reading can continue, but the position was not restored.",
+            [
+              { text: "Continue", style: "cancel" },
+              {
+                text: "Retry",
+                onPress: () => setProgressReloadToken((token) => token + 1),
+              },
+            ]
+          );
         }
       });
     return () => {
       active = false;
     };
-  }, [bookmarkId]);
+  }, [bookmarkId, progressReloadToken]);
 
   useEffect(() => {
     if (
@@ -363,9 +380,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         0,
         Math.min(
           pages.length - 1,
-          saved.mode === "pages"
-            ? saved.pageIndex
-            : Math.floor(saved.progress * pages.length)
+          Math.floor(saved.progress * pages.length - 0.0001)
         )
       );
       setPageIndex(index);
@@ -603,7 +618,11 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   };
 
   const beginAnnotate = () => {
-    if (annotationsStatus !== "ready") {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
       showAnnotationsUnavailable();
       return;
     }
@@ -611,7 +630,11 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   };
 
   const openAnnotationFor = (key: string) => {
-    if (annotationsStatus !== "ready") {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
       showAnnotationsUnavailable();
       return;
     }
@@ -624,10 +647,16 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     if (!annotationKey) {
       return;
     }
-    if (annotationsStatus !== "ready") {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
       showAnnotationsUnavailable();
       return;
     }
+    annotationWriteRef.current = true;
+    setAnnotationWritePending(true);
     const next = annotations.filter(
       (annotation) => annotation.blockKey !== annotationKey
     );
@@ -648,6 +677,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         "Highlight not saved",
         "The highlight could not be saved. Your previous highlights are unchanged."
       );
+    } finally {
+      annotationWriteRef.current = false;
+      setAnnotationWritePending(false);
     }
   };
 
@@ -655,10 +687,16 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     if (!annotationKey) {
       return;
     }
-    if (annotationsStatus !== "ready") {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
       showAnnotationsUnavailable();
       return;
     }
+    annotationWriteRef.current = true;
+    setAnnotationWritePending(true);
     const next = annotations.filter(
       (annotation) => annotation.blockKey !== annotationKey
     );
@@ -672,6 +710,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         "Highlight not removed",
         "The highlight could not be removed. Your saved highlights are unchanged."
       );
+    } finally {
+      annotationWriteRef.current = false;
+      setAnnotationWritePending(false);
     }
   };
 
@@ -1349,7 +1390,8 @@ function paginate(
   fontSize: number,
   width: number,
   height: number,
-  lineHeightMultiplier: number
+  lineHeightMultiplier: number,
+  paragraphSpacing: number
 ): ReaderPage[] {
   const lineHeight = fontSize * lineHeightMultiplier;
   const contentHeight = Math.max(260, height - 250);
@@ -1379,7 +1421,7 @@ function paginate(
         used = 0;
       }
       current.push(block);
-      used += size;
+      used += size + paragraphSpacing;
     }
   }
 

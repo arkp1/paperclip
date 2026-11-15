@@ -31,45 +31,47 @@ function keyFor(bookmarkId: string) {
 export async function loadReadingProgress(
   bookmarkId: string
 ): Promise<ReadingProgress> {
-  const privacy = await getBookmarkPrivacy(bookmarkId);
-  if (privacy === "unavailable") {
-    return DEFAULT_PROGRESS;
-  }
-  const raw =
-    privacy === "private"
-      ? await getVaultSetting(keyFor(bookmarkId))
-      : await getSetting(keyFor(bookmarkId));
-  if (!raw) {
-    return DEFAULT_PROGRESS;
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") {
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
       return DEFAULT_PROGRESS;
     }
-    const value = parsed as Partial<ReadingProgress>;
-    return {
-      progress:
-        typeof value.progress === "number"
-          ? Math.max(0, Math.min(1, value.progress))
-          : 0,
-      offset:
-        typeof value.offset === "number" && Number.isFinite(value.offset)
-          ? Math.max(0, value.offset)
-          : 0,
-      pageIndex:
-        typeof value.pageIndex === "number" && value.pageIndex >= 0
-          ? Math.round(value.pageIndex)
-          : 0,
-      mode: value.mode === "pages" ? "pages" : "scroll",
-      completed: value.completed === true,
-      updatedAt:
-        typeof value.updatedAt === "number" ? value.updatedAt : 0,
-    };
-  } catch (error) {
-    console.warn("Ignoring malformed reading progress.", error);
-    return DEFAULT_PROGRESS;
-  }
+    const raw =
+      privacy === "private"
+        ? await getVaultSetting(keyFor(bookmarkId))
+        : await getSetting(keyFor(bookmarkId));
+    if (!raw) {
+      return DEFAULT_PROGRESS;
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return DEFAULT_PROGRESS;
+      }
+      const value = parsed as Partial<ReadingProgress>;
+      return {
+        progress:
+          typeof value.progress === "number"
+            ? Math.max(0, Math.min(1, value.progress))
+            : 0,
+        offset:
+          typeof value.offset === "number" && Number.isFinite(value.offset)
+            ? Math.max(0, value.offset)
+            : 0,
+        pageIndex:
+          typeof value.pageIndex === "number" && value.pageIndex >= 0
+            ? Math.round(value.pageIndex)
+            : 0,
+        mode: value.mode === "pages" ? "pages" : "scroll",
+        completed: value.completed === true,
+        updatedAt:
+          typeof value.updatedAt === "number" ? value.updatedAt : 0,
+      };
+    } catch (error) {
+      console.warn("Ignoring malformed reading progress.", error);
+      return DEFAULT_PROGRESS;
+    }
+  });
 }
 
 export async function saveReadingProgress(

@@ -1,6 +1,7 @@
 import { getDatabase } from "@/core/database/database";
 import {
   deleteVaultBookmark,
+  getBookmarkPrivacy,
   getVaultBookmarkById,
   isVaultBookmark,
   isVaultFolder,
@@ -340,7 +341,11 @@ export async function setBookmarkFavorite(
   isFavorite: boolean
 ): Promise<void> {
   return withPrivacyWriteLock(async () => {
-    if (await isVaultBookmark(id)) {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
       await updateVaultBookmarkFavorite(id, isFavorite);
       return;
     }
@@ -368,7 +373,11 @@ export async function updateBookmarkContent(
   }
 
   return withPrivacyWriteLock(async () => {
-    if (await isVaultBookmark(id)) {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
       await updateVaultBookmarkContent(id, { title, note: input.note });
       return;
     }
@@ -395,7 +404,11 @@ export async function moveBookmark(
   folderId: string | null
 ): Promise<void> {
   return withPrivacyWriteLock(async () => {
-    if (await isVaultBookmark(id)) {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
       const database = await getDatabase();
       const publicSource = await database.getFirstAsync<{ id: string }>(
         "SELECT id FROM bookmarks WHERE id = ?",
@@ -518,6 +531,10 @@ export async function updateBookmarkMetadata(
 
 export async function deleteBookmark(id: string): Promise<void> {
   return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
     const database = await getDatabase();
     const publicRow = await database.getFirstAsync<{
       previewImagePath: string | null;

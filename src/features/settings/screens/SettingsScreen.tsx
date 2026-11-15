@@ -336,10 +336,12 @@ export function SettingsScreen() {
                             "The encrypted private vault and legacy private data were removed."
                           )
                         )
-                        .catch(() =>
+                        .catch((error: unknown) =>
                           Alert.alert(
-                            "Reset failed",
-                            "The private vault could not be removed. No public data was changed."
+                            "Reset incomplete",
+                            __DEV__ && error instanceof Error
+                              ? `Some private data may remain. Retry the reset. ${error.message}`
+                              : "Some private data may remain. Retry the reset."
                           )
                         );
                     },

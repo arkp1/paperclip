@@ -45,7 +45,7 @@ export function useBookmarkDetails(bookmarkId: string) {
         if (!isActive()) {
           return;
         }
-        if (privacy === "unavailable" && bookmark.folderId) {
+        if (privacy === "unavailable") {
           setState({
             bookmark: null,
             isPrivate: true,

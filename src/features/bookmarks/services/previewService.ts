@@ -15,7 +15,8 @@ import {
 import type { PreviewStatus } from "@/features/bookmarks/types";
 import { fetchLinkMetadata } from "@/features/save-link/services/metadataService";
 import {
-  cachePreviewImage,
+  downloadPreviewImage,
+  writePreviewImageBytes,
   deletePreviewImage,
 } from "@/core/files/previewFileStore";
 
@@ -35,11 +36,15 @@ export async function enrichBookmarkPreview(
   }
 
   try {
+    const downloaded = await downloadPreviewImage(imageUrl);
     await withPrivacyWriteLock(async () => {
       if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
         return;
       }
-      const previewImagePath = await cachePreviewImage(bookmarkId, imageUrl);
+      const previewImagePath = await writePreviewImageBytes(
+        bookmarkId,
+        downloaded
+      );
       if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
         deletePreviewImage(previewImagePath);
         return;
@@ -52,18 +57,22 @@ export async function enrichBookmarkPreview(
     });
   } catch (error) {
     console.warn("Could not cache the preview image.", error);
-    await withPrivacyWriteLock(async () => {
-      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
-        return;
-      }
-      await updateBookmarkPreviewAsset(bookmarkId, {
-        previewImagePath: null,
-        previewStatus: "partial",
-        previewFetchedAt: Date.now(),
-      }).catch(() => {
-        // The bookmark remains saved with its fallback card.
+    try {
+      await withPrivacyWriteLock(async () => {
+        if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+          return;
+        }
+        await updateBookmarkPreviewAsset(bookmarkId, {
+          previewImagePath: null,
+          previewStatus: "partial",
+          previewFetchedAt: Date.now(),
+        }).catch(() => {
+          // The bookmark remains saved with its fallback card.
+        });
       });
-    });
+    } catch (fallbackError) {
+      console.warn("Could not record the preview fallback.", fallbackError);
+    }
   }
 }
 
@@ -71,28 +80,29 @@ export async function enrichBookmarkPreview(
  * Re-fetches metadata and the preview image for an existing public bookmark.
  */
 export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> {
+  const bookmark = await getPublicBookmarkById(bookmarkId);
+  if (!bookmark || (await getBookmarkPrivacy(bookmarkId)) !== "public") {
+    throw new Error("This bookmark is not public.");
+  }
+
+  const metadata = await fetchLinkMetadata(bookmark.originalUrl);
+  let downloaded: Awaited<ReturnType<typeof downloadPreviewImage>> | null = null;
+  if (metadata.imageUrl) {
+    try {
+      downloaded = await downloadPreviewImage(metadata.imageUrl);
+    } catch (error) {
+      console.warn("Could not download the preview image.", error);
+    }
+  }
+
   await withPrivacyWriteLock(async () => {
-    const bookmark = await getPublicBookmarkById(bookmarkId);
-    if (!bookmark) {
-      throw new Error("This bookmark is not public.");
-    }
-    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
-      throw new Error("Private previews stay inside the encrypted vault.");
-    }
-
-    const metadata = await fetchLinkMetadata(bookmark.originalUrl);
-
     if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
       throw new Error("The bookmark moved to the private vault.");
     }
 
     let previewImagePath: string | null = null;
-    if (metadata.imageUrl) {
-      try {
-        previewImagePath = await cachePreviewImage(bookmarkId, metadata.imageUrl);
-      } catch (error) {
-        console.warn("Could not refresh the preview image.", error);
-      }
+    if (downloaded) {
+      previewImagePath = await writePreviewImageBytes(bookmarkId, downloaded);
     }
 
     if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {

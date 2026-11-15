@@ -5,6 +5,10 @@ import { getDatabase } from "@/core/database/database";
 import { getPrivateVault } from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
+import {
+  queuePendingCleanupFiles,
+  removePendingCleanupFiles,
+} from "@/core/database/legacyPrivateDataCleanup";
 import { createId } from "@/core/utils/id";
 import {
   beginBookmarkTransfer,
@@ -784,7 +788,7 @@ export async function resetLegacyPrivateDataInPublicDatabase(): Promise<void> {
     }>(
       `SELECT b.id, b.preview_image_path AS previewImagePath
        FROM bookmarks b
-       JOIN folders f ON f.id = b.folder_id
+       LEFT JOIN folders f ON f.id = b.folder_id
        WHERE f.is_private = 1
           OR EXISTS (
             SELECT 1 FROM vault_transfers t
@@ -793,6 +797,11 @@ export async function resetLegacyPrivateDataInPublicDatabase(): Promise<void> {
               AND t.target = 'private'
           )`
     );
+
+    const previewPaths = privateBookmarks
+      .map((bookmark) => bookmark.previewImagePath)
+      .filter((path): path is string => Boolean(path));
+    await queuePendingCleanupFiles(main, previewPaths);
 
     await main.execAsync("PRAGMA secure_delete = ON;");
     await main.withTransactionAsync(async () => {
@@ -836,6 +845,7 @@ export async function resetLegacyPrivateDataInPublicDatabase(): Promise<void> {
         }
       }
     }
+    await removePendingCleanupFiles(main, previewPaths);
     await Image.clearDiskCache().catch(() => undefined);
     await Image.clearMemoryCache().catch(() => undefined);
     await main.execAsync("PRAGMA wal_checkpoint(TRUNCATE);");
@@ -863,6 +873,34 @@ export async function deleteVaultFolderSafe(
   strategy: FolderDeleteStrategy
 ): Promise<void> {
   const vault = await getPrivateVault();
+  const main = await getDatabase();
+  const publicBookmarks = await main.getAllAsync<{
+    id: string;
+    previewImagePath: string | null;
+  }>(
+    "SELECT id, preview_image_path AS previewImagePath FROM bookmarks WHERE folder_id = ?",
+    id
+  );
+  await main.withTransactionAsync(async () => {
+    for (const bookmark of publicBookmarks) {
+      await main.runAsync(
+        "DELETE FROM app_settings WHERE key IN (?, ?)",
+        keyFor(bookmark.id, "reader_progress"),
+        keyFor(bookmark.id, "reader_annotations")
+      );
+    }
+    await main.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
+    await main.runAsync("DELETE FROM folders WHERE id = ?", id);
+  });
+  for (const bookmark of publicBookmarks) {
+    if (bookmark.previewImagePath) {
+      const file = new File(Paths.document, bookmark.previewImagePath);
+      if (file.exists) {
+        file.delete();
+      }
+    }
+  }
+
   await vault.withTransactionAsync(async () => {
     if (strategy === "keepBookmarks") {
       const rows = await vault.getAllAsync<{ id: string }>(

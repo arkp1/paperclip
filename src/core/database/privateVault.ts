@@ -8,6 +8,7 @@ const VAULT_KEY_NAME = "paperclip.private.vault.key.v1";
 
 let vaultPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let sessionAuthorized = false;
+let sessionVisible = false;
 let sessionGeneration = 0;
 
 const VAULT_SCHEMA = `
@@ -176,12 +177,18 @@ async function openAndPrepareVault(): Promise<SQLite.SQLiteDatabase> {
 
 export function authorizePrivateVaultSession(): void {
   sessionAuthorized = true;
+  sessionVisible = false;
   sessionGeneration += 1;
 }
 
 export function revokePrivateVaultSession(): void {
   sessionAuthorized = false;
+  sessionVisible = false;
   sessionGeneration += 1;
+}
+
+export function setPrivateVaultVisible(visible: boolean): void {
+  sessionVisible = visible;
 }
 
 export function getPrivateVaultGeneration(): number {
@@ -222,7 +229,7 @@ export function getPrivateVault(): Promise<SQLite.SQLiteDatabase> {
 }
 
 export function isPrivateVaultOpen(): boolean {
-  return sessionAuthorized && vaultPromise !== null;
+  return sessionAuthorized && sessionVisible && vaultPromise !== null;
 }
 
 export async function closePrivateVault(): Promise<void> {

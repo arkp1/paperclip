@@ -78,7 +78,11 @@ export async function exportLibraryBackup(): Promise<BackupSummary | null> {
      FROM bookmarks b
      WHERE (
          b.folder_id IS NULL
-         OR b.folder_id IN (SELECT id FROM folders WHERE is_private = 0)
+         OR b.folder_id IN (
+           SELECT f.id FROM folders f
+           WHERE f.is_private = 0
+             AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
+         )
        )
        AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
      ORDER BY b.created_at ASC`

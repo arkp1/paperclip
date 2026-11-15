@@ -8,6 +8,7 @@ import {
   closePrivateVault,
   openPrivateVaultForSession,
   revokePrivateVaultSession,
+  setPrivateVaultVisible,
 } from "@/core/database/privateVault";
 import {
   migrateLegacyPrivateFoldersToVault,
@@ -156,10 +157,10 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
 
   // The app may have backgrounded while the prompt was open. A successful
   // prompt must not publish a session after the foreground lock event.
-  if (
-    attempt !== unlockGeneration ||
-    AppState.currentState !== "active"
-  ) {
+  if (attempt !== unlockGeneration) {
+    return { success: false, message: "Unlock cancelled." };
+  }
+  if (AppState.currentState !== "active") {
     await closePrivateVault();
     return { success: false, message: "Unlock cancelled." };
   }
@@ -169,7 +170,9 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     await migrateLegacyPrivateFoldersToVault();
     await recoverPendingTransfers();
   } catch (error) {
-    await closePrivateVault();
+    if (attempt === unlockGeneration) {
+      await closePrivateVault();
+    }
     console.warn("The private vault could not be opened.", error);
     return {
       success: false,
@@ -185,10 +188,10 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     };
   }
 
-  if (
-    attempt !== unlockGeneration ||
-    AppState.currentState !== "active"
-  ) {
+  if (attempt !== unlockGeneration) {
+    return { success: false, message: "Unlock cancelled." };
+  }
+  if (AppState.currentState !== "active") {
     await closePrivateVault();
     return { success: false, message: "Unlock cancelled." };
   }
@@ -202,7 +205,9 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     await ScreenCapture.preventScreenCaptureAsync("paperclip-private");
   } catch (error) {
     screenCaptureProtected = false;
-    await closePrivateVault();
+    if (attempt === unlockGeneration) {
+      await closePrivateVault();
+    }
     console.warn("Could not enable app-switcher protection.", error);
     return {
       success: false,
@@ -210,10 +215,10 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
         "Private content could not be protected from screenshots or the app switcher. The private session was not opened.",
     };
   }
-  if (
-    attempt !== unlockGeneration ||
-    AppState.currentState !== "active"
-  ) {
+  if (attempt !== unlockGeneration) {
+    return { success: false, message: "Unlock cancelled." };
+  }
+  if (AppState.currentState !== "active") {
     screenCaptureProtected = false;
     await closePrivateVault();
     await ScreenCapture.allowScreenCaptureAsync("paperclip-private").catch(
@@ -222,6 +227,7 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
     return { success: false, message: "Unlock cancelled." };
   }
   privateSpaceUnlocked = true;
+  setPrivateVaultVisible(true);
   emit();
   return { success: true };
 }

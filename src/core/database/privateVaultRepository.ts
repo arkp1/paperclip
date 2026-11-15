@@ -122,6 +122,9 @@ LEFT JOIN bookmarks b ON b.folder_id = f.id
 `;
 
 export async function getVaultFolders(): Promise<Folder[]> {
+  if (!isPrivateVaultOpen()) {
+    return [];
+  }
   const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const rows = await database.getAllAsync<FolderRow>(
@@ -262,6 +265,9 @@ export async function listVaultBookmarksInFolder(
   folderId: string,
   sort: BookmarkSortMode
 ): Promise<Bookmark[]> {
+  if (!isPrivateVaultOpen()) {
+    return [];
+  }
   const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const order =
@@ -534,6 +540,9 @@ export async function getVaultArticle(
   fetchedAt: number;
   cacheVersion: number;
 } | null> {
+  if (!isPrivateVaultOpen()) {
+    return null;
+  }
   const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<{

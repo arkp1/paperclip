@@ -37,14 +37,19 @@ export function resolvePreviewImageUri(relativePath: string): string | null {
   }
 }
 
+export type DownloadedPreviewImage = {
+  bytes: ArrayBuffer;
+  extension: string;
+};
+
 /**
- * Downloads a preview image into app-managed storage and returns its relative
- * path. The caller persists that path in SQLite.
+ * Downloads and validates preview bytes without writing to app storage. Callers
+ * can perform the filesystem write under the privacy lock after re-checking
+ * bookmark ownership.
  */
-export async function cachePreviewImage(
-  bookmarkId: string,
+export async function downloadPreviewImage(
   imageUrl: string
-): Promise<string> {
+): Promise<DownloadedPreviewImage> {
   if (!isSafeRemoteHttpUrl(imageUrl)) {
     throw new Error("Unsupported preview image URL.");
   }
@@ -81,22 +86,40 @@ export async function cachePreviewImage(
       throw new Error("Preview image is too large.");
     }
 
-    const extension = EXTENSION_BY_CONTENT_TYPE[contentType] ?? "img";
-    const directory = getPreviewDirectory();
-    const filename = `${bookmarkId}.${extension}`;
-    const file = new File(directory, filename);
-
-    if (file.exists) {
-      file.delete();
-    }
-    file.create({ intermediates: true });
-
-    await file.write(bytes);
-
-    return `${PREVIEW_DIRECTORY_PATH}/${filename}`;
+    return {
+      bytes,
+      extension: EXTENSION_BY_CONTENT_TYPE[contentType] ?? "img",
+    };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** Writes downloaded preview bytes to a unique app-managed file. */
+export async function writePreviewImageBytes(
+  bookmarkId: string,
+  image: DownloadedPreviewImage
+): Promise<string> {
+  const directory = getPreviewDirectory();
+  const filename = `${bookmarkId}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}.${image.extension}`;
+  const file = new File(directory, filename);
+  file.create({ intermediates: true });
+  await file.write(image.bytes);
+  return `${PREVIEW_DIRECTORY_PATH}/${filename}`;
+}
+
+/**
+ * Downloads a preview image into app-managed storage and returns its relative
+ * path. The caller persists that path in SQLite.
+ */
+export async function cachePreviewImage(
+  bookmarkId: string,
+  imageUrl: string
+): Promise<string> {
+  const downloaded = await downloadPreviewImage(imageUrl);
+  return writePreviewImageBytes(bookmarkId, downloaded);
 }
 
 export function deletePreviewImage(relativePath: string | null): void {
