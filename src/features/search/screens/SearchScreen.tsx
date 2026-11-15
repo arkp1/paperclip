@@ -38,7 +38,7 @@ export function SearchScreen() {
 
   const openBookmark = useCallback(
     (bookmark: Bookmark) => {
-      openBookmarkDestination(bookmark, router);
+      void openBookmarkDestination(bookmark, router);
     },
     [router]
   );

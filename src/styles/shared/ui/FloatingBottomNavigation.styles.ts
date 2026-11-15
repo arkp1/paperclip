@@ -27,7 +27,7 @@ export const styles = StyleSheet.create({
     elevation: 8,
   },
   item: {
-    height: 44,
+    height: 48,
     paddingHorizontal: spacing[3],
     borderRadius: 999,
     flexDirection: "row",
@@ -37,8 +37,8 @@ export const styles = StyleSheet.create({
   },
   selectionPill: {
     position: "absolute",
-    top: 6,
-    height: 44,
+    top: 4,
+    height: 48,
     borderRadius: 999,
   },
 });

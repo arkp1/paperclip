@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { listPublicBookmarks } from "@/features/bookmarks/data/bookmarkRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
 import { RECENT_BOOKMARKS_LIMIT } from "@/features/home/constants";
+import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
 
 type RecentBookmarksState = {
   bookmarks: BookmarkView[];
@@ -37,6 +38,21 @@ export function useRecentBookmarks() {
     useCallback(() => {
       void load();
     }, [load])
+  );
+
+  useEffect(
+    () =>
+      subscribeReadingProgress((bookmarkId, progress) => {
+        setState((previous) => ({
+          ...previous,
+          bookmarks: previous.bookmarks.map((bookmark) =>
+            bookmark.id === bookmarkId
+              ? { ...bookmark, readingProgress: progress }
+              : bookmark
+          ),
+        }));
+      }),
+    []
   );
 
   const refresh = useCallback(async () => {
