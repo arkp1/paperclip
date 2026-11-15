@@ -7,6 +7,34 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  floatingTop: {
+    position: "absolute",
+    zIndex: 30,
+  },
+  progressTrack: {
+    height: 2,
+    width: "100%",
+    opacity: 0.25,
+  },
+  progressFill: {
+    height: 2,
+  },
+  annotateBanner: {
+    marginHorizontal: spacing[4],
+    marginTop: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  annotateBannerText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
   page: {
     height: "100%",
     overflow: "hidden",
@@ -33,7 +61,6 @@ export const styles = StyleSheet.create({
     height: 150,
   },
   caption: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 11,
     lineHeight: 16,
   },
@@ -45,11 +72,26 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   pageIndicator: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 11,
     lineHeight: 16,
     fontWeight: "600",
     letterSpacing: 0.4,
+  },
+  searchHit: {
+    backgroundColor: "#FFE082",
+    color: "#241B00",
+  },
+  link: {
+    textDecorationLine: "underline",
+  },
+  annotationNote: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: "italic",
+    borderLeftWidth: 2,
+    paddingLeft: spacing[3],
+    marginTop: spacing[2],
+    marginBottom: spacing[2],
   },
   fixedPageFooter: {
     position: "absolute",
@@ -65,32 +107,27 @@ export const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   title: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 30,
     lineHeight: 38,
     fontWeight: "700",
     letterSpacing: -0.4,
   },
   meta: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 12,
     lineHeight: 18,
     marginBottom: spacing[2],
   },
   heading: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 23,
     lineHeight: 30,
     fontWeight: "700",
     marginTop: spacing[3],
   },
   paragraph: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 18,
     lineHeight: 30,
   },
   quote: {
-    fontFamily: "GoogleSansFlex-Regular",
     fontSize: 18,
     lineHeight: 30,
     fontStyle: "italic",
@@ -99,5 +136,3 @@ export const styles = StyleSheet.create({
     borderLeftColor: "#A49DA7",
   },
 });
-
-

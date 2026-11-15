@@ -8,7 +8,7 @@ type CountsState = {
   allCount: number;
   uncategorizedCount: number;
   favoriteCount: number;
-  privateFolderCount: number;
+  privateFolderCount: number | null;
   status: "loading" | "ready" | "error";
 };
 
@@ -17,7 +17,7 @@ export function useCollectionCounts() {
     allCount: 0,
     uncategorizedCount: 0,
     favoriteCount: 0,
-    privateFolderCount: 0,
+    privateFolderCount: null,
     status: "loading",
   });
 

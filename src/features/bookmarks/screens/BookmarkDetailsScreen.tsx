@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 
+import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
+
 import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkActionsDialog";
 import { useBookmarkDetails } from "@/features/bookmarks/hooks/useBookmarkDetails";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -28,10 +31,20 @@ export function BookmarkDetailsScreen({
 }: BookmarkDetailsScreenProps) {
   const { theme } = useTheme();
   const router = useRouter();
-  const { bookmark, status, errorMessage, reload } =
+  const { bookmark, isPrivate, status, errorMessage, reload } =
     useBookmarkDetails(bookmarkId);
+  const audioInset = useReaderAudioInset();
   const [actionsVisible, setActionsVisible] = useState(false);
+  const { isUnlocked } = usePrivateSpaceSession();
 
+  useEffect(() => {
+    if (isPrivate && !isUnlocked) {
+      setActionsVisible(false);
+      router.back();
+    }
+  }, [isPrivate, isUnlocked, router]);
+
+  const privateLocked = isPrivate && !isUnlocked;
   const previewUri = bookmark?.previewImagePath
     ? resolvePreviewImageUri(bookmark.previewImagePath)
     : null;
@@ -43,7 +56,7 @@ export function BookmarkDetailsScreen({
         icon="link-variant"
         onBack={() => router.back()}
         actions={
-          bookmark ? (
+          bookmark && !privateLocked ? (
             <IconButton
               icon="dots-vertical"
               label="Link actions"
@@ -53,7 +66,9 @@ export function BookmarkDetailsScreen({
         }
       />
 
-      {status === "loading" ? (
+      {privateLocked ? (
+        <LoadingState message="Locking private content…" />
+      ) : status === "loading" ? (
         <LoadingState message="Opening saved link…" />
       ) : status === "not_found" ? (
         <ErrorState message="This saved link may have been deleted." />
@@ -68,7 +83,7 @@ export function BookmarkDetailsScreen({
         <>
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[styles.content, { paddingBottom: audioInset + 24 }]}
           >
             {previewUri ? (
               <Image

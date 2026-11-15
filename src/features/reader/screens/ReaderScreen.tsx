@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   FlatList,
+  Pressable,
   ScrollView,
   Share,
   Text,
@@ -16,19 +24,37 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { moveBookmark } from "@/features/bookmarks/data/bookmarkRepository";
 import { deleteBookmarkWithAssets } from "@/features/bookmarks/services/previewService";
 import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
+import { isVaultBookmark } from "@/core/database/privateVaultRepository";
 import { FolderPickerContent } from "@/features/folders/components/FolderPickerDialog";
 import { getAllFolders } from "@/features/folders/data/folderRepository";
 import type { Folder } from "@/features/folders/types";
 import { ReaderActionMenu } from "@/features/reader/components/ReaderActionMenu";
+import { ReaderAnnotationSheet } from "@/features/reader/components/ReaderAnnotationSheet";
+import { ReaderImageViewer } from "@/features/reader/components/ReaderImageViewer";
+import { ReaderSearchBar } from "@/features/reader/components/ReaderSearchBar";
 import { ReaderSettingsSheet } from "@/features/reader/components/ReaderSettingsSheet";
 import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
 import { useArticleReader } from "@/features/reader/hooks/useArticleReader";
 import {
   readerFontFamily,
+  readerLineHeightMultiplier,
   readerPalette,
   useReaderPreferences,
 } from "@/features/reader/hooks/useReaderPreferences";
 import type { ArticleBlock } from "@/features/reader/services/articleService";
+import {
+  annotationTints,
+  blockAnnotationKey,
+  contentAnnotationKey,
+  loadAnnotations,
+  saveAnnotations,
+  type HighlightColor,
+  type ReaderAnnotation,
+} from "@/features/reader/services/annotationService";
+import {
+  loadReadingProgress,
+  saveReadingProgress,
+} from "@/features/reader/services/readingProgressService";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { Button } from "@/shared/ui/Button";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -39,7 +65,7 @@ import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/reader/ReaderScreen.styles";
-import { useTheme } from "@/theme";
+import { spacing, useTheme } from "@/theme";
 
 type ReaderScreenProps = {
   bookmarkId: string;
@@ -59,16 +85,27 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const { theme } = useTheme();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const pageHeight = Math.max(240, height - insets.top - 64);
+  const [fullscreen, setFullscreen] = useState(false);
+  const pageHeight = Math.max(
+    240,
+    height - insets.top - (fullscreen ? 0 : 64)
+  );
   const { bookmark, blocks, wordCount, status, errorMessage, reload } =
     useArticleReader(bookmarkId);
-  const { preferences, setFont, setFontSize, setBackground, setPaginate } =
+  const { preferences, setFont, setFontSize, setLineHeight, setParagraphSpacing, setWidth, setAlign, setBackground, setPaginate } =
     useReaderPreferences();
   const { play: playAudio, clear: clearAudio } = useReaderAudio();
   const palette = readerPalette(preferences.background);
   const fontFamily = readerFontFamily(preferences.font);
+  const lineHeightMultiplier = readerLineHeightMultiplier(
+    preferences.font,
+    preferences.lineHeight
+  );
+  const charWidthFactor =
+    preferences.font === "mono" ? 0.6 : preferences.font === "serif" ? 0.52 : 0.54;
   const { isUnlocked } = usePrivateSpaceSession();
   const previousUnlocked = useRef(isUnlocked);
+  const [bookmarkIsPrivate, setBookmarkIsPrivate] = useState(false);
   const menuTriggerRef = useRef<ComponentRef<typeof View>>(null);
   const [actionsVisible, setActionsVisible] = useState(false);
   const [actionsAnchor, setActionsAnchor] = useState<MenuAnchor | null>(null);
@@ -76,18 +113,190 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const [moveVisible, setMoveVisible] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchCursor, setSearchCursor] = useState(0);
+  const [annotateMode, setAnnotateMode] = useState(false);
+  const [annotations, setAnnotations] = useState<ReaderAnnotation[]>([]);
+  const [annotationsStatus, setAnnotationsStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [annotationsReloadToken, setAnnotationsReloadToken] = useState(0);
+  const [annotationWritePending, setAnnotationWritePending] = useState(false);
+  const annotationWriteRef = useRef(false);
+  const [annotationKey, setAnnotationKey] = useState<string | null>(null);
+  const [annotationVisible, setAnnotationVisible] = useState(false);
+  const [viewerImage, setViewerImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
+  const [readingProgress, setReadingProgress] = useState(0);
+  const [completed, setCompleted] = useState(false);
+  const [progressHydrated, setProgressHydrated] = useState(false);
+  const [progressReloadToken, setProgressReloadToken] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const pagesRef = useRef<FlatList<ReaderPage>>(null);
+  const savedProgressRef = useRef<Awaited<
+    ReturnType<typeof loadReadingProgress>
+  > | null>(null);
+  const restoredRef = useRef(false);
+  const lastSavedProgress = useRef(-1);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockPositions = useRef(new Map<string, number>());
+  const latestProgress = useRef<{
+    progress: number;
+    offset: number;
+    pageIndex: number;
+    mode: "scroll" | "pages";
+    completed: boolean;
+  } | null>(null);
 
+  const contentWidth =
+    preferences.width === "narrow"
+      ? Math.min(560, width - 80)
+      : preferences.width === "wide"
+        ? width - 16
+        : Math.min(680, width - 48);
+  const contentWidthStyle = {
+    width: "100%" as const,
+    maxWidth: Math.max(220, contentWidth),
+    alignSelf: "center" as const,
+  };
+  const bodyStyle = {
+    fontFamily,
+    fontWeight: "normal" as const,
+    fontSize: preferences.fontSize,
+    lineHeight: Math.round(preferences.fontSize * lineHeightMultiplier),
+    textAlign: preferences.align,
+    color: palette.text,
+  };
+  const sharedContentStyle = [
+    styles.content,
+    {
+      gap: preferences.paragraphSpacing,
+      ...contentWidthStyle,
+    },
+  ];
+
+  const keyedBlocks = useMemo(() => {
+    const occurrences = new Map<string, number>();
+    return blocks.map((block) => {
+      const identity =
+        block.type === "image"
+          ? `image:${block.src}:${block.alt}`
+          : `${block.type}:${block.text}`;
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return {
+        ...block,
+        sourceKey: stableBlockKey(identity, occurrence),
+      };
+    });
+  }, [blocks]);
   const pages = useMemo(
     () =>
       preferences.paginate
-        ? paginate(blocks, preferences.fontSize, width, height)
+        ? paginate(
+            keyedBlocks,
+            preferences.fontSize,
+            Math.max(220, contentWidth),
+            height,
+            preferences.lineHeight,
+            preferences.paragraphSpacing,
+            charWidthFactor
+          )
         : [],
-    [blocks, preferences.fontSize, height, preferences.paginate, width]
+    [
+      keyedBlocks,
+      contentWidth,
+      preferences.fontSize,
+      preferences.lineHeight,
+      preferences.font,
+      preferences.paragraphSpacing,
+      height,
+      preferences.paginate,
+    ]
   );
   const hasPaginatedContent = pages.some((item) => item.blocks.length > 0);
+  const displayProgress = completed
+    ? 1
+    : preferences.paginate && pages.length > 0
+      ? Math.max(0, Math.min(1, (pageIndex + 1) / pages.length))
+      : readingProgress;
+  const annotationMap = useMemo(() => {
+    const map = new Map<string, ReaderAnnotation>();
+    for (const annotation of annotations) {
+      map.set(annotation.blockKey, annotation);
+    }
+    return map;
+  }, [annotations]);
+  const darkReader =
+    preferences.background === "grey" || preferences.background === "black";
+  const tints = annotationTints(darkReader);
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return [] as { index: number; key: string }[];
+    }
+    return keyedBlocks.reduce<{ index: number; key: string }[]>(
+      (matches, block, index) => {
+        if (block.type !== "image" && block.text.toLowerCase().includes(query)) {
+          matches.push({
+            index,
+            key: block.sourceKey ?? blockAnnotationKey(block),
+          });
+        }
+        return matches;
+      },
+      []
+    );
+  }, [keyedBlocks, searchQuery]);
+
   useEffect(() => {
+    let active = true;
+    setAnnotationsStatus("loading");
+    void loadAnnotations(bookmarkId)
+      .then((next) => {
+        if (active) {
+          setAnnotations(next);
+          setAnnotationsStatus("ready");
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setAnnotationsStatus("error");
+        }
+        console.warn("Could not load reader annotations.", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [bookmarkId, annotationsReloadToken]);
+
+  useEffect(() => {
+    setSearchCursor(0);
+  }, [searchQuery]);
+  useEffect(() => {
+    if (latestProgress.current) {
+      savedProgressRef.current = {
+        ...latestProgress.current,
+        updatedAt: Date.now(),
+      };
+    }
+    restoredRef.current = false;
     setPageIndex(0);
-  }, [bookmarkId, fontFamily, preferences.fontSize, preferences.paginate]);
+  }, [
+    bookmarkId,
+    fontFamily,
+    preferences.fontSize,
+    preferences.lineHeight,
+    preferences.paragraphSpacing,
+    preferences.width,
+    preferences.align,
+    preferences.paginate,
+  ]);
   const speechParagraphs = useMemo(
     () =>
       blocks
@@ -110,15 +319,445 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   }, [bookmark, playAudio, speechParagraphs, status]);
 
   useEffect(() => {
+    let active = true;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    latestProgress.current = null;
+    lastSavedProgress.current = -1;
+    savedProgressRef.current = null;
+    blockPositions.current.clear();
+    restoredRef.current = false;
+    setAnnotations([]);
+    setAnnotationsStatus("loading");
+    setAnnotationVisible(false);
+    setAnnotationKey(null);
+    setAnnotateMode(false);
+    setViewerImage(null);
+    setSearchVisible(false);
+    setProgressHydrated(false);
+    setReadingProgress(0);
+    setCompleted(false);
+    void loadReadingProgress(bookmarkId)
+      .then((progress) => {
+        if (!active) {
+          return;
+        }
+        savedProgressRef.current = progress;
+        setReadingProgress(progress.progress);
+        setCompleted(progress.completed);
+        setProgressHydrated(true);
+      })
+      .catch((error: unknown) => {
+        console.warn("Could not load reading progress.", error);
+        if (active) {
+          setProgressHydrated(true);
+          Alert.alert(
+            "Reading position unavailable",
+            "Your saved position could not be loaded. Reading can continue, but the position was not restored.",
+            [
+              { text: "Continue", style: "cancel" },
+              {
+                text: "Retry",
+                onPress: () => setProgressReloadToken((token) => token + 1),
+              },
+            ]
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [bookmarkId, progressReloadToken]);
+
+  useEffect(() => {
+    if (
+      !progressHydrated ||
+      restoredRef.current ||
+      status !== "ready"
+    ) {
+      return;
+    }
+    const saved = savedProgressRef.current;
+    if (!saved) {
+      return;
+    }
+
+    if (preferences.paginate && pages.length > 0) {
+      const index = Math.max(
+        0,
+        Math.min(
+          pages.length - 1,
+          Math.floor(saved.progress * pages.length - 0.0001)
+        )
+      );
+      setPageIndex(index);
+      setReadingProgress((index + 1) / pages.length);
+      restoredRef.current = true;
+      requestAnimationFrame(() => {
+        pagesRef.current?.scrollToIndex({ index, animated: false });
+      });
+      return;
+    }
+
+    if (!preferences.paginate && contentHeight > 0 && viewportHeight > 0) {
+      const maxOffset = Math.max(0, contentHeight - viewportHeight);
+      const y =
+        saved.mode === "scroll"
+          ? Math.min(maxOffset, saved.offset)
+          : saved.progress * maxOffset;
+      scrollRef.current?.scrollTo({ y, animated: false });
+      setReadingProgress(saved.progress);
+      restoredRef.current = true;
+    }
+  }, [
+    contentHeight,
+    fontFamily,
+    pages,
+    preferences.align,
+    preferences.fontSize,
+    preferences.lineHeight,
+    preferences.paginate,
+    preferences.paragraphSpacing,
+    preferences.width,
+    progressHydrated,
+    status,
+    viewportHeight,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+      }
+      if (latestProgress.current) {
+        void saveReadingProgress(bookmarkId, {
+          ...latestProgress.current,
+          updatedAt: Date.now(),
+        }).catch((error: unknown) => {
+          console.warn("Could not save reading progress on exit.", error);
+        });
+      }
+    };
+  }, [bookmarkId]);
+
+  const persistProgress = (
+    progress: number,
+    offset: number,
+    index: number,
+    mode: "scroll" | "pages",
+    isCompleted = completed,
+    force = false
+  ) => {
+    if (
+      !force &&
+      Math.abs(progress - lastSavedProgress.current) < 0.004 &&
+      !isCompleted
+    ) {
+      return;
+    }
+    lastSavedProgress.current = progress;
+    latestProgress.current = {
+      progress,
+      offset,
+      pageIndex: index,
+      mode,
+      completed: isCompleted,
+    };
+    void saveReadingProgress(bookmarkId, {
+      progress,
+      offset,
+      pageIndex: index,
+      mode,
+      completed: isCompleted,
+      updatedAt: Date.now(),
+    }).catch((error: unknown) => {
+      console.warn("Could not save reading progress.", error);
+    });
+  };
+
+  const handleScroll = (event: {
+    nativeEvent: { contentOffset: { y: number } };
+  }) => {
+    const maxOffset = Math.max(1, contentHeight - viewportHeight);
+    const progress = Math.max(
+      0,
+      Math.min(1, event.nativeEvent.contentOffset.y / maxOffset)
+    );
+    setReadingProgress(progress);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+    }
+    const offset = event.nativeEvent.contentOffset.y;
+    latestProgress.current = {
+      progress,
+      offset,
+      pageIndex: 0,
+      mode: "scroll",
+      completed,
+    };
+    saveTimer.current = setTimeout(() => {
+      persistProgress(progress, offset, 0, "scroll");
+    }, 500);
+  };
+
+  const handlePageChange = (index: number) => {
+    setPageIndex(index);
+    const progress = pages.length > 0 ? (index + 1) / pages.length : 0;
+    setReadingProgress(progress);
+    persistProgress(progress, 0, index, "pages");
+  };
+
+  const toggleCompleted = () => {
+    const next = !completed;
+    const progress = next ? 1 : Math.max(0.01, readingProgress);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    setCompleted(next);
+    setReadingProgress(progress);
+    persistProgress(
+      progress,
+      preferences.paginate ? 0 : (latestProgress.current?.offset ?? 0),
+      pageIndex,
+      preferences.paginate ? "pages" : "scroll",
+      next,
+      true
+    );
+  };
+
+  const jumpToTop = () => {
+    setReadingProgress(0);
+    setPageIndex(0);
+    if (preferences.paginate) {
+      pagesRef.current?.scrollToIndex({ index: 0, animated: true });
+      persistProgress(0, 0, 0, "pages", completed);
+    } else {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      persistProgress(0, 0, 0, "scroll", completed);
+    }
+  };
+
+  const jumpToBlock = (
+    blockIndex: number,
+    blockKey: string,
+    query = ""
+  ) => {
+    if (preferences.paginate && pages.length > 0) {
+      const normalizedQuery = query.trim().toLowerCase();
+      const pageByKey = pages.findIndex((candidate) =>
+        candidate.blocks.some(
+          (block) =>
+            block.type !== "image" &&
+            (block.sourceKey ?? blockAnnotationKey(block)) === blockKey
+        )
+      );
+      const pageByMatch =
+        normalizedQuery.length > 0
+          ? pages.findIndex((candidate) =>
+              candidate.blocks.some(
+                (block) =>
+                  block.type !== "image" &&
+                  (block.sourceKey ?? blockAnnotationKey(block)) ===
+                    blockKey &&
+                  block.text.toLowerCase().includes(normalizedQuery)
+              )
+            )
+          : -1;
+      const page = pageByMatch >= 0 ? pageByMatch : pageByKey;
+      if (page >= 0) {
+        setPageIndex(page);
+        pagesRef.current?.scrollToIndex({ index: page, animated: true });
+        persistProgress((page + 1) / pages.length, 0, page, "pages", completed);
+      }
+      return;
+    }
+
+    const measured = blockPositions.current.get(blockKey);
+    const ratio = blocks.length > 0 ? blockIndex / blocks.length : 0;
+    const y =
+      measured !== undefined
+        ? Math.max(0, measured - 72)
+        : ratio * Math.max(1, contentHeight - viewportHeight);
+    scrollRef.current?.scrollTo({ y, animated: true });
+    setReadingProgress(ratio);
+  };
+
+  const navigateSearch = (direction: -1 | 1) => {
+    if (searchMatches.length === 0) {
+      return;
+    }
+    const next =
+      (searchCursor + direction + searchMatches.length) %
+      searchMatches.length;
+    setSearchCursor(next);
+    const match = searchMatches[next];
+    if (match) {
+      jumpToBlock(match.index, match.key, searchQuery);
+    }
+  };
+
+  useEffect(() => {
+    if (!searchVisible || !searchQuery.trim() || searchMatches.length === 0) {
+      return;
+    }
+    setSearchCursor(0);
+    const match = searchMatches[0];
+    if (match) {
+      jumpToBlock(match.index, match.key, searchQuery);
+    }
+    // Jump as the query changes; arrow navigation is handled separately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchVisible]);
+
+  const showAnnotationsUnavailable = () => {
+    Alert.alert(
+      "Highlights unavailable",
+      "Your saved highlights could not be loaded. Editing is blocked so the existing data is not overwritten.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Retry",
+          onPress: () => setAnnotationsReloadToken((token) => token + 1),
+        },
+      ]
+    );
+  };
+
+  const beginAnnotate = () => {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
+      showAnnotationsUnavailable();
+      return;
+    }
+    setAnnotateMode(true);
+  };
+
+  const openAnnotationFor = (key: string) => {
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
+      showAnnotationsUnavailable();
+      return;
+    }
+    setAnnotationKey(key);
+    setAnnotationVisible(true);
+    setAnnotateMode(false);
+  };
+
+  const saveAnnotation = async (color: HighlightColor, note: string) => {
+    if (!annotationKey) {
+      return;
+    }
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
+      showAnnotationsUnavailable();
+      return;
+    }
+    annotationWriteRef.current = true;
+    setAnnotationWritePending(true);
+    const next = annotations.filter(
+      (annotation) => annotation.blockKey !== annotationKey
+    );
+    next.push({
+      id: `${Date.now()}-${annotationKey.slice(0, 20)}`,
+      blockKey: annotationKey,
+      color,
+      note,
+      createdAt: Date.now(),
+    });
+    try {
+      await saveAnnotations(bookmarkId, next);
+      setAnnotations(next);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
+    } catch {
+      Alert.alert(
+        "Highlight not saved",
+        "The highlight could not be saved. Your previous highlights are unchanged."
+      );
+    } finally {
+      annotationWriteRef.current = false;
+      setAnnotationWritePending(false);
+    }
+  };
+
+  const removeAnnotation = async () => {
+    if (!annotationKey) {
+      return;
+    }
+    if (
+      annotationsStatus !== "ready" ||
+      annotationWritePending ||
+      annotationWriteRef.current
+    ) {
+      showAnnotationsUnavailable();
+      return;
+    }
+    annotationWriteRef.current = true;
+    setAnnotationWritePending(true);
+    const next = annotations.filter(
+      (annotation) => annotation.blockKey !== annotationKey
+    );
+    try {
+      await saveAnnotations(bookmarkId, next);
+      setAnnotations(next);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
+    } catch {
+      Alert.alert(
+        "Highlight not removed",
+        "The highlight could not be removed. Your saved highlights are unchanged."
+      );
+    } finally {
+      annotationWriteRef.current = false;
+      setAnnotationWritePending(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    if (isUnlocked) {
+      void isVaultBookmark(bookmarkId).then((isPrivate) => {
+        if (active) {
+          setBookmarkIsPrivate(isPrivate);
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [bookmarkId, isUnlocked]);
+
+  useEffect(() => {
     if (previousUnlocked.current && !isUnlocked) {
       setActionsVisible(false);
       setMoveVisible(false);
       setSettingsVisible(false);
+      setSearchVisible(false);
+      setViewerImage(null);
+      setAnnotationVisible(false);
+      setAnnotationKey(null);
+      setAnnotateMode(false);
       clearAudio();
-      void reload();
+      if (bookmarkIsPrivate) {
+        router.back();
+      } else {
+        void reload();
+      }
     }
     previousUnlocked.current = isUnlocked;
-  }, [clearAudio, isUnlocked, reload]);
+  }, [bookmarkIsPrivate, clearAudio, isUnlocked, reload, router]);
 
   const openMove = async () => {
     setActionsVisible(false);
@@ -173,17 +812,13 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     }
   };
 
-  const bodyStyle = {
-    fontFamily,
-    fontSize: preferences.fontSize,
-    lineHeight: Math.round(preferences.fontSize * 1.72),
-    color: palette.text,
-  };
   const headingStyle = {
     ...bodyStyle,
     fontWeight: "700" as const,
     fontSize: preferences.fontSize + 4,
-    lineHeight: Math.round((preferences.fontSize + 4) * 1.4),
+    lineHeight: Math.round(
+      (preferences.fontSize + 4) * lineHeightMultiplier
+    ),
     marginTop: 18,
   };
 
@@ -216,6 +851,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             {wordCount > 0
               ? ` · ${Math.max(1, Math.round(wordCount / 220))} min read`
               : ""}
+            {` · ${Math.round(displayProgress * 100)}%${completed ? " · Finished" : ""}`}
           </Text>
         </>
       ) : null}
@@ -228,27 +864,84 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
               block={block}
               paginated={paginated}
               captionColor={palette.muted}
+              fontFamily={fontFamily}
+              onOpen={(image) => setViewerImage(image)}
             />
           );
         }
 
+        const contentKey = contentAnnotationKey(block);
+        const blockKey = block.sourceKey ?? contentKey;
+        const annotation =
+          annotationMap.get(blockKey) ?? annotationMap.get(contentKey);
+        const annotationTarget = annotationMap.has(blockKey)
+          ? blockKey
+          : annotationMap.has(contentKey)
+            ? contentKey
+            : blockKey;
+        const tint = annotation ? tints[annotation.color] : null;
+
         return (
-          <Text
+          <View
             key={`${block.type}-${blockIndex}-${fontFamily}-${preferences.fontSize}`}
-            style={[
-              block.type === "heading"
-                ? headingStyle
-                : block.type === "quote"
-                  ? [
-                      styles.quote,
-                      bodyStyle,
-                      { borderLeftColor: palette.muted },
-                    ]
-                  : bodyStyle,
-            ]}
+            onLayout={(event) => {
+              blockPositions.current.set(
+                blockKey,
+                event.nativeEvent.layout.y
+              );
+            }}
           >
-            {block.text}
-          </Text>
+            <Text
+              selectable={!annotateMode}
+              onPress={
+                annotateMode
+                  ? () => openAnnotationFor(annotationTarget)
+                  : undefined
+              }
+              style={[
+                block.type === "heading"
+                  ? headingStyle
+                  : block.type === "quote"
+                    ? [
+                        styles.quote,
+                        bodyStyle,
+                        { borderLeftColor: palette.muted },
+                      ]
+                    : bodyStyle,
+                tint
+                  ? {
+                      backgroundColor: tint.background,
+                      borderBottomColor: tint.border,
+                      borderBottomWidth: 1,
+                    }
+                  : null,
+              ]}
+            >
+              {renderInlineText(
+                block.text,
+                searchQuery,
+                annotateMode
+                  ? null
+                  : (url) => {
+                      void openExternalUrl(url);
+                    },
+                palette.text
+              )}
+            </Text>
+            {annotation?.note ? (
+              <Text
+                style={[
+                  styles.annotationNote,
+                  {
+                    color: palette.muted,
+                    borderLeftColor: tint?.border ?? palette.muted,
+                  },
+                ]}
+              >
+                {annotation.note}
+              </Text>
+            ) : null}
+          </View>
         );
       })}
     </>
@@ -263,42 +956,120 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             : "dark"
         }
       />
-      <TopAppBar
-        title="Read"
-        icon="book-open-page-variant-outline"
-        foregroundColor={palette.text}
-        onBack={() => router.back()}
-        actions={
-          bookmark && (status === "ready" || status === "error") ? (
-            <View style={styles.headerActions}>
-              <IconButton
-                icon="format-size"
-                label="Reading settings"
-                onPress={() => setSettingsVisible(true)}
-                color={palette.text}
-              />
-              <View ref={menuTriggerRef} collapsable={false}>
+      {!fullscreen ? (
+        <TopAppBar
+          title="Read"
+          icon="book-open-page-variant-outline"
+          foregroundColor={palette.text}
+          onBack={() => router.back()}
+          actions={
+            bookmark && (status === "ready" || status === "error") ? (
+              <View style={styles.headerActions}>
                 <IconButton
-                  icon="dots-vertical"
-                  label="Reading options"
+                  icon="fullscreen"
+                  label="Enter full-screen reading"
+                  onPress={() => setFullscreen(true)}
                   color={palette.text}
-                  onPress={() => {
-                    setActionsAnchor({ x: width - 12, y: 80 });
-                    setActionsVisible(true);
-                    menuTriggerRef.current?.measureInWindow(
-                      (x, y, triggerWidth, triggerHeight) => {
-                        setActionsAnchor({
-                          x: x + triggerWidth,
-                          y: y + triggerHeight,
-                        });
-                      }
-                    );
-                  }}
                 />
+                <IconButton
+                  icon="format-size"
+                  label="Reading settings"
+                  onPress={() => setSettingsVisible(true)}
+                  color={palette.text}
+                />
+                <View ref={menuTriggerRef} collapsable={false}>
+                  <IconButton
+                    icon="dots-vertical"
+                    label="Reading options"
+                    color={palette.text}
+                    onPress={() => {
+                      setActionsAnchor({ x: width - 12, y: 80 });
+                      setActionsVisible(true);
+                      menuTriggerRef.current?.measureInWindow(
+                        (x, y, triggerWidth, triggerHeight) => {
+                          setActionsAnchor({
+                            x: x + triggerWidth,
+                            y: y + triggerHeight,
+                          });
+                        }
+                      );
+                    }}
+                  />
+                </View>
               </View>
-            </View>
-          ) : undefined
-        }
+            ) : undefined
+          }
+        />
+      ) : (
+        <View
+          style={[
+            styles.floatingTop,
+            { top: insets.top + spacing[2], right: spacing[4] },
+          ]}
+        >
+          <IconButton
+            icon="fullscreen-exit"
+            label="Exit full-screen reading"
+            onPress={() => setFullscreen(false)}
+            withBackground
+            color={palette.text}
+            inkColor={palette.text}
+          />
+        </View>
+      )}
+
+      {status === "ready" ? (
+        <View
+          pointerEvents="none"
+          style={[styles.progressTrack, { backgroundColor: palette.muted }]}
+        >
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${displayProgress * 100}%`,
+                backgroundColor: palette.text,
+              },
+            ]}
+          />
+        </View>
+      ) : null}
+
+      {annotateMode ? (
+        <View
+          style={[
+            styles.annotateBanner,
+            {
+              backgroundColor: palette.background,
+              borderColor: palette.muted,
+            },
+          ]}
+        >
+          <Text style={[styles.annotateBannerText, { color: palette.muted }]}>
+            Tap a paragraph to highlight
+          </Text>
+          <IconButton
+            icon="close"
+            label="Cancel highlighting"
+            size={18}
+            onPress={() => setAnnotateMode(false)}
+            color={palette.muted}
+          />
+        </View>
+      ) : null}
+
+      <ReaderSearchBar
+        visible={searchVisible}
+        query={searchQuery}
+        currentMatch={searchCursor}
+        matchCount={searchMatches.length}
+        onQueryChange={setSearchQuery}
+        onPrevious={() => navigateSearch(-1)}
+        onNext={() => navigateSearch(1)}
+        onClose={() => {
+          setSearchVisible(false);
+          setSearchQuery("");
+        }}
       />
 
       {status === "loading" ? (
@@ -316,7 +1087,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         <>
           {preferences.paginate && hasPaginatedContent ? (
             <FlatList
-              key={`${fontFamily}-${preferences.fontSize}`}
+              key="reader-pages"
+              ref={pagesRef}
               data={pages}
               horizontal
               pagingEnabled
@@ -335,25 +1107,34 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
               maxToRenderPerBatch={5}
               removeClippedSubviews={false}
               onMomentumScrollEnd={(event) => {
-                setPageIndex(
+                handlePageChange(
                   Math.round(event.nativeEvent.contentOffset.x / width)
                 );
               }}
               renderItem={({ item, index }) => (
-                <View
-                  style={[styles.page, styles.content, { width, height: pageHeight }]}
-                >
-                  {renderContent(item.blocks, index === 0, true)}
+                <View style={[styles.page, { width, height: pageHeight }]}>
+                  <View style={[sharedContentStyle, { height: pageHeight }]}>
+                    {renderContent(item.blocks, index === 0, true)}
+                  </View>
                 </View>
               )}
             />
           ) : (
             <ScrollView
-              key={`${fontFamily}-${preferences.fontSize}`}
-              contentContainerStyle={styles.content}
+              key="reader-scroll"
+              ref={scrollRef}
+              contentContainerStyle={sharedContentStyle}
               showsVerticalScrollIndicator={false}
+              scrollEventThrottle={32}
+              onScroll={handleScroll}
+              onContentSizeChange={(_, nextHeight) => {
+                setContentHeight(nextHeight);
+              }}
+              onLayout={(event) => {
+                setViewportHeight(event.nativeEvent.layout.height);
+              }}
             >
-              {renderContent(blocks, true)}
+              {renderContent(keyedBlocks, true)}
             </ScrollView>
           )}
 
@@ -371,8 +1152,14 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
                   },
                 ]}
               >
-                <Text style={[styles.pageIndicator, { color: palette.muted }]}>
-                  {Math.min(pageIndex + 1, pages.length)} / {pages.length}
+                <Text
+                  style={[
+                    styles.pageIndicator,
+                    { color: palette.muted, fontFamily },
+                  ]}
+                >
+                  {Math.min(pageIndex + 1, pages.length)} / {pages.length} ·{" "}
+                  {Math.round(displayProgress * 100)}%
                 </Text>
               </View>
             </View>
@@ -383,10 +1170,10 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       <ReaderActionMenu
         visible={actionsVisible}
         anchor={actionsAnchor}
+        completed={completed}
         onClose={() => setActionsVisible(false)}
         onDelete={confirmDelete}
         onOpenBrowser={() => {
-          setActionsVisible(false);
           if (bookmark) {
             void openExternalUrl(bookmark.originalUrl);
           }
@@ -397,6 +1184,12 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         onMove={() => {
           void openMove();
         }}
+        onSearch={() => setSearchVisible(true)}
+        onAnnotate={() => {
+          beginAnnotate();
+        }}
+        onToggleCompleted={toggleCompleted}
+        onJumpToTop={jumpToTop}
       />
 
       <ReaderSettingsSheet
@@ -405,8 +1198,38 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         onClose={() => setSettingsVisible(false)}
         onFontChange={setFont}
         onFontSizeChange={setFontSize}
+        onLineHeightChange={setLineHeight}
+        onParagraphSpacingChange={setParagraphSpacing}
+        onWidthChange={setWidth}
+        onAlignChange={setAlign}
         onBackgroundChange={setBackground}
         onPaginateChange={setPaginate}
+      />
+
+      <ReaderAnnotationSheet
+        visible={annotationVisible}
+        initialColor={
+          (annotationKey
+            ? annotationMap.get(annotationKey)?.color
+            : undefined) ?? "yellow"
+        }
+        initialNote={
+          (annotationKey ? annotationMap.get(annotationKey)?.note : "") ?? ""
+        }
+        canDelete={Boolean(annotationKey && annotationMap.has(annotationKey))}
+        onDelete={removeAnnotation}
+        onClose={() => {
+          setAnnotationVisible(false);
+          setAnnotationKey(null);
+        }}
+        onSave={saveAnnotation}
+      />
+
+      <ReaderImageViewer
+        visible={viewerImage !== null}
+        source={viewerImage?.src ?? null}
+        alt={viewerImage?.alt ?? "Article image"}
+        onClose={() => setViewerImage(null)}
       />
 
       <AppDialog
@@ -435,6 +1258,84 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
 }
 
 /**
+ * Splits article text into search highlights and tappable external links.
+ */
+function renderInlineText(
+  text: string,
+  query: string,
+  onLink: ((url: string) => void) | null,
+  linkColor: string
+) {
+  const nodes: ReactNode[] = [];
+  const urlPattern = /https?:\/\/[^\s)]+/gi;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  const pushText = (value: string) => {
+    if (!value) {
+      return;
+    }
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      nodes.push(value);
+      return;
+    }
+    const lower = value.toLowerCase();
+    let index = 0;
+    let found = lower.indexOf(normalizedQuery, index);
+    if (found < 0) {
+      nodes.push(value);
+      return;
+    }
+    while (found >= 0) {
+      if (found > index) {
+        nodes.push(value.slice(index, found));
+      }
+      const end = found + normalizedQuery.length;
+      nodes.push(
+        <Text key={`hit-${key++}`} style={styles.searchHit}>
+          {value.slice(found, end)}
+        </Text>
+      );
+      index = end;
+      found = lower.indexOf(normalizedQuery, index);
+    }
+    if (index < value.length) {
+      nodes.push(value.slice(index));
+    }
+  };
+
+  while ((match = urlPattern.exec(text))) {
+    pushText(text.slice(cursor, match.index));
+    const url = match[0].replace(/[.,;:!?]+$/, "");
+    nodes.push(
+      <Text
+        key={`link-${key++}`}
+        suppressHighlighting
+        style={[styles.link, { color: linkColor }]}
+        onPress={
+          onLink
+            ? () => {
+                onLink(url);
+              }
+            : undefined
+        }
+      >
+        {url}
+      </Text>
+    );
+    cursor = match.index + url.length;
+    if (url.length < match[0].length) {
+      pushText(match[0].slice(url.length));
+      cursor = match.index + match[0].length;
+    }
+  }
+  pushText(text.slice(cursor));
+  return nodes;
+}
+
+/**
  * Renders an article image and hides tiny inline icons or social badges that
  * would otherwise be enlarged to a full-width image.
  */
@@ -442,10 +1343,14 @@ function ArticleImageBlock({
   block,
   paginated,
   captionColor,
+  fontFamily,
+  onOpen,
 }: {
   block: Extract<ArticleBlock, { type: "image" }>;
   paginated: boolean;
   captionColor: string;
+  fontFamily: string;
+  onOpen: (image: { src: string; alt: string }) => void;
 }) {
   const [hidden, setHidden] = useState(false);
 
@@ -454,25 +1359,35 @@ function ArticleImageBlock({
   }
 
   return (
-    <View style={styles.imageBlock}>
-      <Image
-        source={{ uri: block.src }}
-        style={[styles.image, paginated && styles.pageImage]}
-        contentFit="cover"
-        transition={150}
-        accessibilityLabel={block.alt}
-        onLoad={(event) => {
-          if (event.source.width < 140 || event.source.height < 100) {
-            setHidden(true);
-          }
-        }}
-      />
-      {block.alt && block.alt !== "Article image" ? (
-        <Text style={[styles.caption, { color: captionColor }]}>
-          {block.alt}
-        </Text>
-      ) : null}
-    </View>
+    <Pressable
+      onPress={() => onOpen({ src: block.src, alt: block.alt })}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={block.alt || "View article image"}
+    >
+      <View style={styles.imageBlock}>
+        <Image
+          source={{ uri: block.src }}
+          style={[styles.image, paginated && styles.pageImage]}
+          contentFit="cover"
+          cachePolicy="memory"
+          transition={150}
+          accessibilityLabel={block.alt}
+          onLoad={(event) => {
+            if (event.source.width < 140 || event.source.height < 100) {
+              setHidden(true);
+            }
+          }}
+          onError={() => setHidden(true)}
+        />
+        {block.alt && block.alt !== "Article image" ? (
+          <Text
+            style={[styles.caption, { color: captionColor, fontFamily }]}
+          >
+            {block.alt}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -480,15 +1395,27 @@ function ArticleImageBlock({
  * Groups article blocks into swipe-sized pages. This is an estimate based on
  * font size and viewport; each page is a non-scrolling horizontal page.
  */
+function stableBlockKey(identity: string, occurrence: number): string {
+  let hash = 2166136261;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `block-${(hash >>> 0).toString(36)}-${occurrence}`;
+}
+
 function paginate(
   blocks: ArticleBlock[],
   fontSize: number,
   width: number,
-  height: number
+  height: number,
+  lineHeightMultiplier: number,
+  paragraphSpacing: number,
+  charWidthFactor: number
 ): ReaderPage[] {
-  const lineHeight = fontSize * 1.72;
+  const lineHeight = fontSize * lineHeightMultiplier;
   const contentHeight = Math.max(260, height - 250);
-  const charsPerLine = Math.max(18, width / (fontSize * 0.54));
+  const charsPerLine = Math.max(18, width / (fontSize * charWidthFactor));
   const viewportBudget = Math.max(
     280,
     Math.floor((contentHeight / lineHeight) * charsPerLine * 0.82)
@@ -514,7 +1441,7 @@ function paginate(
         used = 0;
       }
       current.push(block);
-      used += size;
+      used += size + paragraphSpacing;
     }
   }
 

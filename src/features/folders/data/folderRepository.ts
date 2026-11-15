@@ -1,4 +1,21 @@
 import { getDatabase } from "@/core/database/database";
+import {
+  countVaultFolders,
+  createVaultFolder,
+  deleteVaultFolder,
+  getVaultFolderById,
+  getVaultFolders,
+  isVaultFolder,
+  markVaultFolderOpened,
+  movePublicFolderToVault,
+  moveVaultFolderToPublic,
+  updateVaultFolderColor,
+  updateVaultFolderName,
+} from "@/core/database/privateVaultRepository";
+import { isPrivateVaultOpen } from "@/core/database/privateVault";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import { PUBLIC_FOLDER_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
+import { PUBLIC_BOOKMARK_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -45,7 +62,9 @@ SELECT
   f.updated_at AS updatedAt,
   CASE WHEN f.is_private = 1 THEN NULL ELSE COUNT(b.id) END AS bookmarkCount
 FROM folders f
-LEFT JOIN bookmarks b ON b.folder_id = f.id
+LEFT JOIN bookmarks b
+  ON b.folder_id = f.id
+ AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
 `;
 
 function mapFolderRow(row: FolderRow): Folder {
@@ -88,6 +107,7 @@ export async function getAllFolders(): Promise<Folder[]> {
   const rows = await database.getAllAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.is_private = 0
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id
      ORDER BY f.sort_order ASC, f.name COLLATE NOCASE ASC`
   );
@@ -98,23 +118,14 @@ export async function getPrivateFolders(): Promise<Folder[]> {
   if (!isPrivateSpaceUnlocked()) {
     throw new Error("Private folders are locked.");
   }
-
-  const database = await getDatabase();
-  const rows = await database.getAllAsync<FolderRow>(
-    `${PRIVATE_FOLDER_SELECT}
-     WHERE f.is_private = 1
-     GROUP BY f.id
-     ORDER BY f.name COLLATE NOCASE ASC`
-  );
-  return rows.map(mapFolderRow);
+  return getVaultFolders();
 }
 
-export async function countPrivateFolders(): Promise<number> {
-  const database = await getDatabase();
-  const row = await database.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM folders WHERE is_private = 1"
-  );
-  return row?.count ?? 0;
+export async function countPrivateFolders(): Promise<number | null> {
+  if (!isPrivateVaultOpen()) {
+    return null;
+  }
+  return countVaultFolders();
 }
 
 /**
@@ -128,6 +139,7 @@ export async function getRecentFolders(limit: number): Promise<Folder[]> {
   const rows = await database.getAllAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.is_private = 0
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id
      ORDER BY COALESCE(f.last_opened_at, f.created_at) DESC
      LIMIT ?`,
@@ -140,34 +152,64 @@ export async function setFolderColor(
   folderId: string,
   colorKey: FolderColorKey | null
 ): Promise<void> {
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
-    colorKey,
-    Date.now(),
-    folderId
-  );
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(folderId)) {
+      await updateVaultFolderColor(folderId, colorKey);
+      return;
+    }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
+      colorKey,
+      Date.now(),
+      folderId
+    );
 
-  if (result.changes === 0) {
-    throw new FolderNotFoundError();
-  }
+    if (result.changes === 0) {
+      throw new FolderNotFoundError();
+    }
+  });
 }
 
 export async function setFolderPrivate(
   folderId: string,
   isPrivate: boolean
 ): Promise<void> {
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE folders SET is_private = ?, updated_at = ? WHERE id = ?",
-    isPrivate ? 1 : 0,
-    Date.now(),
-    folderId
-  );
+  return withPrivacyWriteLock(async () => {
+    if (isPrivate) {
+      if (!isPrivateSpaceUnlocked()) {
+        throw new Error("Unlock the private space first.");
+      }
+      if (await isVaultFolder(folderId)) {
+        const database = await getDatabase();
+        const publicSource = await database.getFirstAsync<{ id: string }>(
+          "SELECT id FROM folders WHERE id = ? AND is_private = 0",
+          folderId
+        );
+        if (!publicSource) {
+          return;
+        }
+      }
+      await movePublicFolderToVault(folderId);
+      return;
+    }
 
-  if (result.changes === 0) {
-    throw new FolderNotFoundError();
-  }
+    if (await isVaultFolder(folderId)) {
+      await moveVaultFolderToPublic(folderId);
+      return;
+    }
+
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE folders SET is_private = 0, updated_at = ? WHERE id = ?",
+      Date.now(),
+      folderId
+    );
+
+    if (result.changes === 0) {
+      throw new FolderNotFoundError();
+    }
+  });
 }
 
 export async function getFolderById(id: string): Promise<Folder | null> {
@@ -175,10 +217,17 @@ export async function getFolderById(id: string): Promise<Folder | null> {
   const row = await database.getFirstAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.id = ?
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id`,
     id
   );
-  return row ? mapFolderRow(row) : null;
+  if (row) {
+    return mapFolderRow(row);
+  }
+  if (isPrivateVaultOpen()) {
+    return getVaultFolderById(id);
+  }
+  return null;
 }
 
 export async function createFolder(input: CreateFolderInput): Promise<Folder> {
@@ -221,69 +270,100 @@ export async function createFolder(input: CreateFolderInput): Promise<Folder> {
   return folder;
 }
 
+export async function createPrivateFolder(
+  input: CreateFolderInput
+): Promise<Folder> {
+  const validation = validateFolderName(input.name);
+  if (!validation.valid) {
+    throw new InvalidFolderNameError(validation.message);
+  }
+  try {
+    return await createVaultFolder(
+      validation.name,
+      input.colorKey ?? "lavender"
+    );
+  } catch (error) {
+    throw mapFolderWriteError(error);
+  }
+}
+
 export async function renameFolder(id: string, name: string): Promise<void> {
   const validation = validateFolderName(name);
   if (!validation.valid) {
     throw new InvalidFolderNameError(validation.message);
   }
 
-  const database = await getDatabase();
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(id)) {
+      await updateVaultFolderName(id, validation.name);
+      return;
+    }
 
-  try {
-    const result = await database.runAsync(
-      "UPDATE folders SET name = ?, updated_at = ? WHERE id = ?",
-      validation.name,
-      Date.now(),
-      id
-    );
-    if (result.changes === 0) {
-      throw new FolderNotFoundError();
+    const database = await getDatabase();
+
+    try {
+      const result = await database.runAsync(
+        "UPDATE folders SET name = ?, updated_at = ? WHERE id = ?",
+        validation.name,
+        Date.now(),
+        id
+      );
+      if (result.changes === 0) {
+        throw new FolderNotFoundError();
+      }
+    } catch (error) {
+      if (error instanceof FolderNotFoundError) {
+        throw error;
+      }
+      throw mapFolderWriteError(error);
     }
-  } catch (error) {
-    if (error instanceof FolderNotFoundError) {
-      throw error;
-    }
-    throw mapFolderWriteError(error);
-  }
+  });
 }
 
 export async function deleteFolder(
   id: string,
   strategy: FolderDeleteStrategy
 ): Promise<void> {
-  const database = await getDatabase();
-  const previewPaths =
-    strategy === "deleteBookmarks"
-      ? await database.getAllAsync<{ previewImagePath: string | null }>(
-          `SELECT preview_image_path AS previewImagePath
-           FROM bookmarks
-           WHERE folder_id = ? AND preview_image_path IS NOT NULL`,
-          id
-        )
-      : [];
-
-  await database.withTransactionAsync(async () => {
-    if (strategy === "deleteBookmarks") {
-      await database.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
-    } else {
-      await database.runAsync(
-        "UPDATE bookmarks SET folder_id = NULL, updated_at = ? WHERE folder_id = ?",
-        Date.now(),
-        id
-      );
+  return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(id)) {
+      await deleteVaultFolder(id, strategy);
+      return;
     }
 
-    const result = await database.runAsync("DELETE FROM folders WHERE id = ?", id);
-    if (result.changes === 0) {
-      throw new FolderNotFoundError();
+    const database = await getDatabase();
+    const previewPaths =
+      strategy === "deleteBookmarks"
+        ? await database.getAllAsync<{ previewImagePath: string | null }>(
+            `SELECT preview_image_path AS previewImagePath
+             FROM bookmarks
+             WHERE folder_id = ? AND preview_image_path IS NOT NULL`,
+            id
+          )
+        : [];
+
+    await database.withTransactionAsync(async () => {
+      if (strategy === "deleteBookmarks") {
+        await database.runAsync("DELETE FROM bookmarks WHERE folder_id = ?", id);
+      } else {
+        await database.runAsync(
+          "UPDATE bookmarks SET folder_id = NULL, updated_at = ? WHERE folder_id = ?",
+          Date.now(),
+          id
+        );
+      }
+
+      const result = await database.runAsync("DELETE FROM folders WHERE id = ?", id);
+      if (result.changes === 0) {
+        throw new FolderNotFoundError();
+      }
+    });
+
+    for (const row of previewPaths) {
+      if (row.previewImagePath) {
+        deletePreviewImage(row.previewImagePath);
+      }
     }
   });
-
-  for (const row of previewPaths) {
-    if (row.previewImagePath) {
-      deletePreviewImage(row.previewImagePath);
-    }
-  }
 }
 
 /**
@@ -291,6 +371,10 @@ export async function deleteFolder(
  * touch updated_at because access history is not a content change.
  */
 export async function markFolderOpened(id: string, openedAt: number): Promise<void> {
+  if (await isVaultFolder(id)) {
+    await markVaultFolderOpened(id, openedAt);
+    return;
+  }
   const database = await getDatabase();
   await database.runAsync(
     "UPDATE folders SET last_opened_at = ? WHERE id = ?",

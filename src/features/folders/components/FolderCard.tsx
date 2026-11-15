@@ -8,7 +8,12 @@ import { ScalePressable } from "@/shared/ui/ScalePressable";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
 import { styles } from "@/styles/features/folders/FolderCard.styles";
-import { folderColors, pickFolderColorKey, useTheme } from "@/theme";
+import {
+  folderColors,
+  folderTone,
+  pickFolderColorKey,
+  useTheme,
+} from "@/theme";
 
 type FolderCardProps = {
   folder: Folder;
@@ -17,8 +22,12 @@ type FolderCardProps = {
 };
 
 function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
-  const { theme } = useTheme();
-  const tint = folderColors[folder.colorKey ?? pickFolderColorKey(folder.id)];
+  const { theme, folderTonal } = useTheme();
+  const colorKey = folder.colorKey ?? pickFolderColorKey(folder.id);
+  const tint = folderColors[colorKey];
+  const tone = folderTonal
+    ? folderTone(colorKey, theme.scheme, theme.colors.background)
+    : null;
   const countLabel = `${folder.bookmarkCount ?? 0} saved`;
 
   return (
@@ -31,16 +40,21 @@ function FolderCardComponent({ folder, onPress, onMore }: FolderCardProps) {
       style={[
         styles.card,
         {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: tone?.card ?? theme.colors.surface,
           borderColor: theme.colors.outlineVariant,
         },
       ]}
     >
-      <View style={[styles.iconTile, { backgroundColor: tint.background }]}>
+      <View
+        style={[
+          styles.iconTile,
+          { backgroundColor: tone?.iconContainer ?? tint.background },
+        ]}
+      >
         <MaterialCommunityIcons
           name="folder"
           size={22}
-          color={tint.foreground}
+          color={tone?.icon ?? tint.foreground}
         />
       </View>
 

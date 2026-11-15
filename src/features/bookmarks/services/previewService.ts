@@ -1,6 +1,12 @@
 import { getDatabase } from "@/core/database/database";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import {
+  getBookmarkPrivacy,
+} from "@/core/database/privateVaultRepository";
+import { PUBLIC_BOOKMARK_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
 import {
   getBookmarkById,
+  getPublicBookmarkById,
   deleteBookmark,
   markBookmarkPreviewFailed,
   updateBookmarkMetadata,
@@ -9,7 +15,8 @@ import {
 import type { PreviewStatus } from "@/features/bookmarks/types";
 import { fetchLinkMetadata } from "@/features/save-link/services/metadataService";
 import {
-  cachePreviewImage,
+  downloadPreviewImage,
+  writePreviewImageBytes,
   deletePreviewImage,
 } from "@/core/files/previewFileStore";
 
@@ -29,21 +36,46 @@ export async function enrichBookmarkPreview(
   }
 
   try {
-    const previewImagePath = await cachePreviewImage(bookmarkId, imageUrl);
-    await updateBookmarkPreviewAsset(bookmarkId, {
-      previewImagePath,
-      previewStatus: "success",
-      previewFetchedAt: Date.now(),
+    const downloaded = await downloadPreviewImage(imageUrl);
+    await withPrivacyWriteLock(async () => {
+      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+        return;
+      }
+      const previewImagePath = await writePreviewImageBytes(
+        bookmarkId,
+        downloaded
+      );
+      if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+        deletePreviewImage(previewImagePath);
+        return;
+      }
+      await updateBookmarkPreviewAsset(bookmarkId, {
+        previewImagePath,
+        previewStatus: "success",
+        previewFetchedAt: Date.now(),
+      }).catch((error: unknown) => {
+        deletePreviewImage(previewImagePath);
+        throw error;
+      });
     });
   } catch (error) {
     console.warn("Could not cache the preview image.", error);
-    await updateBookmarkPreviewAsset(bookmarkId, {
-      previewImagePath: null,
-      previewStatus: "partial",
-      previewFetchedAt: Date.now(),
-    }).catch(() => {
-      // The bookmark remains saved with its fallback card.
-    });
+    try {
+      await withPrivacyWriteLock(async () => {
+        if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+          return;
+        }
+        await updateBookmarkPreviewAsset(bookmarkId, {
+          previewImagePath: null,
+          previewStatus: "partial",
+          previewFetchedAt: Date.now(),
+        }).catch(() => {
+          // The bookmark remains saved with its fallback card.
+        });
+      });
+    } catch (fallbackError) {
+      console.warn("Could not record the preview fallback.", fallbackError);
+    }
   }
 }
 
@@ -51,44 +83,70 @@ export async function enrichBookmarkPreview(
  * Re-fetches metadata and the preview image for an existing public bookmark.
  */
 export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> {
-  const bookmark = await getBookmarkById(bookmarkId);
-  if (!bookmark) {
-    throw new Error("This bookmark no longer exists.");
+  const bookmark = await getPublicBookmarkById(bookmarkId);
+  if (!bookmark || (await getBookmarkPrivacy(bookmarkId)) !== "public") {
+    throw new Error("This bookmark is not public.");
   }
 
   const metadata = await fetchLinkMetadata(bookmark.originalUrl);
-
-  let previewImagePath: string | null = null;
+  let downloaded: Awaited<ReturnType<typeof downloadPreviewImage>> | null = null;
   if (metadata.imageUrl) {
     try {
-      previewImagePath = await cachePreviewImage(bookmarkId, metadata.imageUrl);
+      downloaded = await downloadPreviewImage(metadata.imageUrl);
     } catch (error) {
-      console.warn("Could not refresh the preview image.", error);
+      console.warn("Could not download the preview image.", error);
     }
   }
 
-  const previewStatus: PreviewStatus = previewImagePath
-    ? "success"
-    : metadata.title || metadata.description
-      ? "partial"
-      : "unavailable";
+  await withPrivacyWriteLock(async () => {
+    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+      throw new Error("The bookmark moved to the private vault.");
+    }
+    const current = await getPublicBookmarkById(bookmarkId);
+    if (!current) {
+      throw new Error("The bookmark is no longer public.");
+    }
 
-  await updateBookmarkMetadata(bookmarkId, {
-    title: metadata.title,
-    description: metadata.description,
-    sourceName: metadata.siteName,
-    canonicalUrl: metadata.canonicalUrl,
-    previewStatus,
-    previewFetchedAt: Date.now(),
-    previewImagePath,
+    let previewImagePath: string | null = null;
+    if (downloaded) {
+      previewImagePath = await writePreviewImageBytes(bookmarkId, downloaded);
+    }
+
+    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+      if (previewImagePath) {
+        deletePreviewImage(previewImagePath);
+      }
+      throw new Error("The bookmark moved to the private vault.");
+    }
+
+    const previewStatus: PreviewStatus = previewImagePath
+      ? "success"
+      : metadata.title || metadata.description
+        ? "partial"
+        : "unavailable";
+
+    await updateBookmarkMetadata(bookmarkId, {
+      title: metadata.title,
+      description: metadata.description,
+      sourceName: metadata.siteName,
+      canonicalUrl: metadata.canonicalUrl,
+      previewStatus,
+      previewFetchedAt: Date.now(),
+      previewImagePath,
+    }).catch((error: unknown) => {
+      if (previewImagePath) {
+        deletePreviewImage(previewImagePath);
+      }
+      throw error;
+    });
+
+    if (
+      current.previewImagePath &&
+      current.previewImagePath !== previewImagePath
+    ) {
+      deletePreviewImage(current.previewImagePath);
+    }
   });
-
-  if (
-    bookmark.previewImagePath &&
-    bookmark.previewImagePath !== previewImagePath
-  ) {
-    deletePreviewImage(bookmark.previewImagePath);
-  }
 }
 
 export async function deleteBookmarkWithAssets(bookmarkId: string): Promise<void> {
@@ -112,6 +170,7 @@ export async function refreshMissingPreviews(limit = 30): Promise<void> {
      FROM bookmarks b
      LEFT JOIN folders f ON f.id = b.folder_id
      WHERE (f.is_private IS NULL OR f.is_private = 0)
+       AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
        AND (
          b.preview_image_path IS NULL
          OR b.preview_status IN ('pending', 'partial', 'failed')

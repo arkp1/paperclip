@@ -1,4 +1,10 @@
 import { getDatabase } from "@/core/database/database";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import {
+  getBookmarkPrivacy,
+  getVaultArticle,
+  saveVaultArticle,
+} from "@/core/database/privateVaultRepository";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { isReadableArticleUrl } from "@/features/reader/utils/isReadableArticleUrl";
 
@@ -6,11 +12,13 @@ export type ArticleBlock =
   | {
       type: "heading" | "paragraph" | "quote";
       text: string;
+      sourceKey?: string;
     }
   | {
       type: "image";
       src: string;
       alt: string;
+      sourceKey?: string;
     };
 
 export type CachedArticle = {
@@ -79,19 +87,26 @@ async function getCachedArticle(
   bookmarkId: string,
   allowStale = false
 ): Promise<CachedArticle | null> {
-  const database = await getDatabase();
-  const row = await database.getFirstAsync<{
-    blocks: string;
-    wordCount: number;
-    fetchedAt: number;
-    cacheVersion: number;
-  }>(
-    `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
-            cache_version AS cacheVersion
-     FROM article_contents
-     WHERE bookmark_id = ?`,
-    bookmarkId
-  );
+  const privacy = await getBookmarkPrivacy(bookmarkId);
+  if (privacy === "unavailable") {
+    throw new Error("The private vault is locked.");
+  }
+  const row = (privacy === "private")
+    ? await getVaultArticle(bookmarkId)
+    : await (
+        await getDatabase()
+      ).getFirstAsync<{
+        blocks: string;
+        wordCount: number;
+        fetchedAt: number;
+        cacheVersion: number;
+      }>(
+        `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
+                cache_version AS cacheVersion
+         FROM article_contents
+         WHERE bookmark_id = ?`,
+        bookmarkId
+      );
 
   if (
     !row ||
@@ -120,21 +135,37 @@ async function saveArticle(
   bookmarkId: string,
   article: CachedArticle
 ): Promise<void> {
-  const database = await getDatabase();
-  await database.runAsync(
-    `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(bookmark_id) DO UPDATE SET
-       blocks = excluded.blocks,
-       word_count = excluded.word_count,
-       fetched_at = excluded.fetched_at,
-       cache_version = excluded.cache_version`,
-    bookmarkId,
-    JSON.stringify(article.blocks),
-    article.wordCount,
-    article.fetchedAt,
-    ARTICLE_CACHE_VERSION
-  );
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
+      await saveVaultArticle(
+        bookmarkId,
+        JSON.stringify(article.blocks),
+        article.wordCount,
+        article.fetchedAt,
+        ARTICLE_CACHE_VERSION
+      );
+      return;
+    }
+    const database = await getDatabase();
+    await database.runAsync(
+      `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(bookmark_id) DO UPDATE SET
+         blocks = excluded.blocks,
+         word_count = excluded.word_count,
+         fetched_at = excluded.fetched_at,
+         cache_version = excluded.cache_version`,
+      bookmarkId,
+      JSON.stringify(article.blocks),
+      article.wordCount,
+      article.fetchedAt,
+      ARTICLE_CACHE_VERSION
+    );
+  });
 }
 
 async function fetchArticle(url: string): Promise<CachedArticle> {

@@ -2,6 +2,10 @@ import { Directory, File, Paths } from "expo-file-system";
 import * as LegacyFileSystem from "expo-file-system/legacy";
 
 import { getDatabase } from "@/core/database/database";
+import {
+  PUBLIC_BOOKMARK_TRANSFER_FILTER,
+  PUBLIC_FOLDER_TRANSFER_FILTER,
+} from "@/core/database/vaultTransferState";
 import { refreshBookmarkPreview } from "@/features/bookmarks/services/previewService";
 import { validateHttpUrl } from "@/shared/utils/url";
 
@@ -57,9 +61,10 @@ export async function exportLibraryBackup(): Promise<BackupSummary | null> {
             is_private AS isPrivate, sort_order AS sortOrder,
             last_opened_at AS lastOpenedAt, created_at AS createdAt,
             updated_at AS updatedAt
-     FROM folders
-     WHERE is_private = 0
-     ORDER BY sort_order ASC, name COLLATE NOCASE ASC`
+     FROM folders f
+     WHERE f.is_private = 0
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
+     ORDER BY f.sort_order ASC, f.name COLLATE NOCASE ASC`
   );
 
   const bookmarkRows = await database.getAllAsync<Record<string, unknown>>(
@@ -70,10 +75,17 @@ export async function exportLibraryBackup(): Promise<BackupSummary | null> {
             favicon_path AS faviconPath, preview_status AS previewStatus,
             preview_fetched_at AS previewFetchedAt, is_favorite AS isFavorite,
             created_at AS createdAt, updated_at AS updatedAt
-     FROM bookmarks
-     WHERE folder_id IS NULL
-        OR folder_id IN (SELECT id FROM folders WHERE is_private = 0)
-     ORDER BY created_at ASC`
+     FROM bookmarks b
+     WHERE (
+         b.folder_id IS NULL
+         OR b.folder_id IN (
+           SELECT f.id FROM folders f
+           WHERE f.is_private = 0
+             AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
+         )
+       )
+       AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
+     ORDER BY b.created_at ASC`
   );
 
   const images: BackupImage[] = [];

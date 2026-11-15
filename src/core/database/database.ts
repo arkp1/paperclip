@@ -1,5 +1,6 @@
 import * as SQLite from "expo-sqlite";
 
+import { cleanupLegacyPlaintextPrivateData } from "./legacyPrivateDataCleanup";
 import { runMigrations } from "./migrations";
 
 const DATABASE_NAME = "paperclip.db";
@@ -26,5 +27,11 @@ async function openAndPrepareDatabase(): Promise<SQLite.SQLiteDatabase> {
   await database.execAsync("PRAGMA journal_mode = WAL;");
   await database.execAsync("PRAGMA foreign_keys = ON;");
   await runMigrations(database);
+  try {
+    await cleanupLegacyPlaintextPrivateData(database);
+  } catch (error) {
+    // Cleanup is recoverable and must not block reading existing data.
+    console.warn("Pending private-data cleanup remains outstanding.", error);
+  }
   return database;
 }

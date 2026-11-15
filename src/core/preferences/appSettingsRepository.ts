@@ -4,13 +4,20 @@ export type AppSettingKey =
   | "theme_mode"
   | "theme_amoled"
   | "theme_dynamic"
+  | "folder_tonal_cards"
   | "accent_color"
   | "bookmark_view"
   | "bookmark_sort"
   | "reader_font"
   | "reader_font_size"
+  | "reader_line_height"
+  | "reader_paragraph_spacing"
+  | "reader_width"
+  | "reader_align"
   | "reader_background"
-  | "reader_paginate";
+  | "reader_paginate"
+  | `reader_progress:${string}`
+  | `reader_annotations:${string}`;
 
 export async function getSetting(key: AppSettingKey): Promise<string | null> {
   const database = await getDatabase();

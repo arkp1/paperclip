@@ -26,6 +26,9 @@ function getPreviewDirectory(): Directory {
 
 /** Resolves a stored relative preview path to a displayable file URI. */
 export function resolvePreviewImageUri(relativePath: string): string | null {
+  if (relativePath.startsWith("data:")) {
+    return relativePath;
+  }
   try {
     const file = new File(Paths.document, relativePath);
     return file.exists ? file.uri : null;
@@ -34,26 +37,54 @@ export function resolvePreviewImageUri(relativePath: string): string | null {
   }
 }
 
-/**
- * Downloads a preview image into app-managed storage and returns its relative
- * path. The caller persists that path in SQLite.
- */
-export async function cachePreviewImage(
-  bookmarkId: string,
-  imageUrl: string
-): Promise<string> {
-  if (!isSafeRemoteHttpUrl(imageUrl)) {
-    throw new Error("Unsupported preview image URL.");
-  }
+export type DownloadedPreviewImage = {
+  bytes: ArrayBuffer;
+  extension: string;
+};
 
+async function fetchPreviewResponse(
+  imageUrl: string,
+  signal: AbortSignal
+): Promise<Response> {
+  let currentUrl = imageUrl;
+  for (let hop = 0; hop <= 3; hop += 1) {
+    if (!isSafeRemoteHttpUrl(currentUrl)) {
+      throw new Error("Unsupported preview image URL.");
+    }
+    const response = await fetch(currentUrl, {
+      signal,
+      redirect: "manual",
+      headers: { Accept: "image/*" },
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new Error("Preview image redirect had no destination.");
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+    if (response.url && !isSafeRemoteHttpUrl(response.url)) {
+      throw new Error("Preview image redirected to an unsupported destination.");
+    }
+    return response;
+  }
+  throw new Error("Preview image redirected too many times.");
+}
+
+/**
+ * Downloads and validates preview bytes without writing to app storage. Callers
+ * can perform the filesystem write under the privacy lock after re-checking
+ * bookmark ownership.
+ */
+export async function downloadPreviewImage(
+  imageUrl: string
+): Promise<DownloadedPreviewImage> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(imageUrl, {
-      signal: controller.signal,
-      headers: { Accept: "image/*" },
-    });
+    const response = await fetchPreviewResponse(imageUrl, controller.signal);
 
     if (!response.ok) {
       throw new Error(`Preview image request failed with ${response.status}.`);
@@ -78,27 +109,45 @@ export async function cachePreviewImage(
       throw new Error("Preview image is too large.");
     }
 
-    const extension = EXTENSION_BY_CONTENT_TYPE[contentType] ?? "img";
-    const directory = getPreviewDirectory();
-    const filename = `${bookmarkId}.${extension}`;
-    const file = new File(directory, filename);
-
-    if (file.exists) {
-      file.delete();
-    }
-    file.create({ intermediates: true });
-
-    await file.write(bytes);
-
-    return `${PREVIEW_DIRECTORY_PATH}/${filename}`;
+    return {
+      bytes,
+      extension: EXTENSION_BY_CONTENT_TYPE[contentType] ?? "img",
+    };
   } finally {
     clearTimeout(timeout);
   }
 }
 
-export function deletePreviewImage(relativePath: string | null): void {
+/** Writes downloaded preview bytes to a unique app-managed file. */
+export async function writePreviewImageBytes(
+  bookmarkId: string,
+  image: DownloadedPreviewImage
+): Promise<string> {
+  const directory = getPreviewDirectory();
+  const filename = `${bookmarkId}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}.${image.extension}`;
+  const file = new File(directory, filename);
+  file.create({ intermediates: true });
+  await file.write(new Uint8Array(image.bytes));
+  return `${PREVIEW_DIRECTORY_PATH}/${filename}`;
+}
+
+/**
+ * Downloads a preview image into app-managed storage and returns its relative
+ * path. The caller persists that path in SQLite.
+ */
+export async function cachePreviewImage(
+  bookmarkId: string,
+  imageUrl: string
+): Promise<string> {
+  const downloaded = await downloadPreviewImage(imageUrl);
+  return writePreviewImageBytes(bookmarkId, downloaded);
+}
+
+export function tryDeletePreviewImage(relativePath: string | null): boolean {
   if (!relativePath) {
-    return;
+    return true;
   }
 
   try {
@@ -106,7 +155,13 @@ export function deletePreviewImage(relativePath: string | null): void {
     if (file.exists) {
       file.delete();
     }
+    return true;
   } catch (error) {
     console.warn("Could not remove a preview image.", error);
+    return false;
   }
+}
+
+export function deletePreviewImage(relativePath: string | null): void {
+  tryDeletePreviewImage(relativePath);
 }

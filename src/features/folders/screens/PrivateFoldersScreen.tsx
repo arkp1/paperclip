@@ -13,7 +13,7 @@ import { FolderCard } from "@/features/folders/components/FolderCard";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import {
-  createFolder,
+  createPrivateFolder,
   deleteFolder,
   getPrivateFolders,
   renameFolder as renameFolderRecord,
@@ -94,8 +94,7 @@ export function PrivateFoldersScreen() {
     colorKey: FolderColorKey
   ): Promise<string | null> => {
     try {
-      const folder = await createFolder({ name, colorKey });
-      await setFolderPrivate(folder.id, true);
+      await createPrivateFolder({ name, colorKey });
       await load();
       return null;
     } catch (error) {
@@ -231,15 +230,22 @@ export function PrivateFoldersScreen() {
           }
           void setFolderPrivate(folder.id, false)
             .then(load)
-            .catch(() =>
-              Alert.alert("Private folders", "Could not make this folder public.")
-            );
+            .catch((error: unknown) => {
+              console.warn("Could not make the private folder public.", error);
+              Alert.alert(
+                "Private folders",
+                __DEV__ && error instanceof Error
+                  ? `Could not make this folder public.\n\n${error.message}`
+                  : "Could not make this folder public."
+              );
+            });
         }}
       />
 
       <DeleteFolderDialog
         folder={deleteTarget}
         visible={deleteTarget !== null}
+        allowKeepBookmarks
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
       />

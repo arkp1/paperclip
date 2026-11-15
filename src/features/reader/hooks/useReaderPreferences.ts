@@ -1,37 +1,74 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Alert } from "react-native";
 
-import { getSetting, setSetting } from "@/core/preferences/appSettingsRepository";
+import {
+  getSetting,
+  setSetting,
+  type AppSettingKey,
+} from "@/core/preferences/appSettingsRepository";
 
 export type ReaderFont = "sans" | "serif" | "mono";
 export type ReaderBackground = "white" | "sepia" | "grey" | "black";
+export type ReaderWidth = "narrow" | "standard" | "wide";
+export type ReaderAlign = "left" | "justify";
 
 export type ReaderPreferences = {
   font: ReaderFont;
   fontSize: number;
+  lineHeight: number;
+  paragraphSpacing: number;
+  width: ReaderWidth;
+  align: ReaderAlign;
   background: ReaderBackground;
   paginate: boolean;
 };
 
 const FONT_SETTING = "reader_font";
 const SIZE_SETTING = "reader_font_size";
+const LINE_HEIGHT_SETTING = "reader_line_height";
+const PARAGRAPH_SPACING_SETTING = "reader_paragraph_spacing";
+const WIDTH_SETTING = "reader_width";
+const ALIGN_SETTING = "reader_align";
 const BACKGROUND_SETTING = "reader_background";
 const PAGINATE_SETTING = "reader_paginate";
 
 const DEFAULTS: ReaderPreferences = {
   font: "sans",
   fontSize: 18,
+  lineHeight: 1.72,
+  paragraphSpacing: 16,
+  width: "standard",
+  align: "left",
   background: "white",
   paginate: false,
 };
 
 export function readerFontFamily(font: ReaderFont): string {
   if (font === "serif") {
-    return "serif";
+    return "NotoSerif-Regular";
   }
   if (font === "mono") {
-    return "monospace";
+    return "JetBrainsMono-Regular";
   }
   return "GoogleSansFlex-Regular";
+}
+
+/**
+ * Serif and mono faces have different vertical metrics than Google Sans Flex.
+ * Keep the user's saved multiplier as the sans baseline and normalize it so a
+ * line-height choice remains visually consistent across typefaces.
+ */
+export function readerLineHeightMultiplier(
+  font: ReaderFont,
+  lineHeight: number
+): number {
+  if (font === "serif") {
+    return lineHeight * (1.55 / 1.72);
+  }
+  if (font === "mono") {
+    return lineHeight * (1.6 / 1.72);
+  }
+  return lineHeight;
 }
 
 export function readerPalette(background: ReaderBackground) {
@@ -61,37 +98,130 @@ function isReaderBackground(value: string | null): value is ReaderBackground {
   );
 }
 
+function isReaderWidth(value: string | null): value is ReaderWidth {
+  return value === "narrow" || value === "standard" || value === "wide";
+}
+
+function isReaderAlign(value: string | null): value is ReaderAlign {
+  return value === "left" || value === "justify";
+}
+
 /**
  * Reads and persists the reader's font, size, and paper colour preferences.
  */
 export function useReaderPreferences() {
   const [preferences, setPreferences] = useState<ReaderPreferences>(DEFAULTS);
+  const changedFields = useRef(new Set<keyof ReaderPreferences>());
+  const latestValues = useRef(new Map<AppSettingKey, string>());
+
+  const reportSaveError = (key: AppSettingKey, value: string) => {
+    if (latestValues.current.get(key) !== value) {
+      return;
+    }
+    Alert.alert(
+      "Reader settings",
+      "The setting changed for this session but could not be saved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Retry",
+          onPress: () => {
+            if (latestValues.current.get(key) !== value) {
+              return;
+            }
+            void setSetting(key, value).catch(() =>
+              reportSaveError(key, value)
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const persist = (key: AppSettingKey, value: string) => {
+    latestValues.current.set(key, value);
+    void setSetting(key, value).catch(() => reportSaveError(key, value));
+  };
 
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
       getSetting(FONT_SETTING),
       getSetting(SIZE_SETTING),
+      getSetting(LINE_HEIGHT_SETTING),
+      getSetting(PARAGRAPH_SPACING_SETTING),
+      getSetting(WIDTH_SETTING),
+      getSetting(ALIGN_SETTING),
       getSetting(BACKGROUND_SETTING),
       getSetting(PAGINATE_SETTING),
     ])
-      .then(([font, size, background, paginate]) => {
-        if (cancelled) {
-          return;
+      .then(
+        ([
+          font,
+          size,
+          lineHeight,
+          paragraphSpacing,
+          width,
+          align,
+          background,
+          paginate,
+        ]) => {
+          if (cancelled) {
+            return;
+          }
+          const parsedSize = Number.parseInt(size ?? "", 10);
+          const parsedLineHeight = Number.parseFloat(lineHeight ?? "");
+          const parsedSpacing = Number.parseInt(paragraphSpacing ?? "", 10);
+          const loaded: ReaderPreferences = {
+            font: isReaderFont(font) ? font : DEFAULTS.font,
+            fontSize:
+              Number.isFinite(parsedSize) && parsedSize >= 14 && parsedSize <= 28
+                ? parsedSize
+                : DEFAULTS.fontSize,
+            lineHeight:
+              Number.isFinite(parsedLineHeight) &&
+              parsedLineHeight >= 1.2 &&
+              parsedLineHeight <= 2.2
+                ? parsedLineHeight
+                : DEFAULTS.lineHeight,
+            paragraphSpacing:
+              Number.isFinite(parsedSpacing) &&
+              parsedSpacing >= 8 &&
+              parsedSpacing <= 32
+                ? parsedSpacing
+                : DEFAULTS.paragraphSpacing,
+            width: isReaderWidth(width) ? width : DEFAULTS.width,
+            align: isReaderAlign(align) ? align : DEFAULTS.align,
+            background: isReaderBackground(background)
+              ? background
+              : DEFAULTS.background,
+            paginate: paginate === "true",
+          };
+          setPreferences((current) => {
+            const changed = changedFields.current;
+            return {
+              font: changed.has("font") ? current.font : loaded.font,
+              fontSize: changed.has("fontSize")
+                ? current.fontSize
+                : loaded.fontSize,
+              lineHeight: changed.has("lineHeight")
+                ? current.lineHeight
+                : loaded.lineHeight,
+              paragraphSpacing: changed.has("paragraphSpacing")
+                ? current.paragraphSpacing
+                : loaded.paragraphSpacing,
+              width: changed.has("width") ? current.width : loaded.width,
+              align: changed.has("align") ? current.align : loaded.align,
+              background: changed.has("background")
+                ? current.background
+                : loaded.background,
+              paginate: changed.has("paginate")
+                ? current.paginate
+                : loaded.paginate,
+            };
+          });
         }
-        const parsedSize = Number.parseInt(size ?? "", 10);
-        setPreferences({
-          font: isReaderFont(font) ? font : DEFAULTS.font,
-          fontSize:
-            Number.isFinite(parsedSize) && parsedSize >= 14 && parsedSize <= 28
-              ? parsedSize
-              : DEFAULTS.fontSize,
-          background: isReaderBackground(background)
-            ? background
-            : DEFAULTS.background,
-          paginate: paginate === "true",
-        });
-      })
+      )
       .catch(() => {
         // Keep readable defaults if preferences cannot be loaded.
       });
@@ -102,35 +232,65 @@ export function useReaderPreferences() {
   }, []);
 
   const setFont = (font: ReaderFont) => {
+    changedFields.current.add("font");
     setPreferences((previous) => ({ ...previous, font }));
-    void setSetting(FONT_SETTING, font).catch(() => undefined);
+    persist(FONT_SETTING, font);
   };
 
   const setFontSize = (fontSize: number) => {
+    changedFields.current.add("fontSize");
     const clamped = Math.max(14, Math.min(28, fontSize));
     setPreferences((previous) => ({ ...previous, fontSize: clamped }));
-    void setSetting(SIZE_SETTING, String(clamped)).catch(() => undefined);
+    persist(SIZE_SETTING, String(clamped));
+  };
+
+  const setLineHeight = (lineHeight: number) => {
+    changedFields.current.add("lineHeight");
+    const clamped = Math.max(1.2, Math.min(2.2, lineHeight));
+    setPreferences((previous) => ({ ...previous, lineHeight: clamped }));
+    persist(LINE_HEIGHT_SETTING, String(clamped));
+  };
+
+  const setParagraphSpacing = (paragraphSpacing: number) => {
+    changedFields.current.add("paragraphSpacing");
+    const clamped = Math.max(8, Math.min(32, paragraphSpacing));
+    setPreferences((previous) => ({ ...previous, paragraphSpacing: clamped }));
+    persist(PARAGRAPH_SPACING_SETTING, String(clamped));
+  };
+
+  const setWidth = (width: ReaderWidth) => {
+    changedFields.current.add("width");
+    setPreferences((previous) => ({ ...previous, width }));
+    persist(WIDTH_SETTING, width);
+  };
+
+  const setAlign = (align: ReaderAlign) => {
+    changedFields.current.add("align");
+    setPreferences((previous) => ({ ...previous, align }));
+    persist(ALIGN_SETTING, align);
   };
 
   const setBackground = (background: ReaderBackground) => {
+    changedFields.current.add("background");
     setPreferences((previous) => ({ ...previous, background }));
-    void setSetting(BACKGROUND_SETTING, background).catch(() => undefined);
+    persist(BACKGROUND_SETTING, background);
   };
 
   const setPaginate = (paginate: boolean) => {
+    changedFields.current.add("paginate");
     setPreferences((previous) => ({ ...previous, paginate }));
-    void setSetting(PAGINATE_SETTING, paginate ? "true" : "false").catch(
-      () => undefined
-    );
+    persist(PAGINATE_SETTING, paginate ? "true" : "false");
   };
 
   return {
     preferences,
     setFont,
     setFontSize,
+    setLineHeight,
+    setParagraphSpacing,
+    setWidth,
+    setAlign,
     setBackground,
     setPaginate,
   };
 }
-
-

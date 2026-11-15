@@ -11,6 +11,7 @@ import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog
 import { SmartCollectionCard } from "@/features/folders/components/SmartCollectionCard";
 import { setFolderPrivate } from "@/features/folders/data/folderRepository";
 import { useFolders } from "@/features/folders/hooks/useFolders";
+import { unlockPrivateSpace } from "@/core/security/privateSpaceSession";
 import type { Folder, FolderDeleteStrategy } from "@/features/folders/types";
 import type { FolderColorKey } from "@/theme";
 import { AppText } from "@/shared/ui/AppText";
@@ -97,6 +98,13 @@ export function FoldersScreen() {
     setActionsFolder(null);
 
     try {
+      const unlocked = await unlockPrivateSpace();
+      if (!unlocked.success) {
+        if (unlocked.message !== "Unlock cancelled.") {
+          Alert.alert("Private folders", unlocked.message);
+        }
+        return;
+      }
       await setFolderPrivate(folder.id, true);
       await reload();
       await reloadCounts();
@@ -197,9 +205,13 @@ export function FoldersScreen() {
                 <SmartCollectionCard
                   icon="lock-outline"
                   title="Private"
-                  subtitle={`${privateFolderCount} ${
-                    privateFolderCount === 1 ? "folder" : "folders"
-                  }`}
+                  subtitle={
+                    privateFolderCount === null
+                      ? "Locked"
+                      : `${privateFolderCount} ${
+                          privateFolderCount === 1 ? "folder" : "folders"
+                        }`
+                  }
                   onPress={() => router.push("/folders/private")}
                 />
               </View>

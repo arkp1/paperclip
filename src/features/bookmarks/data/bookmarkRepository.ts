@@ -1,4 +1,31 @@
 import { getDatabase } from "@/core/database/database";
+import {
+  deleteVaultBookmark,
+  getBookmarkPrivacy,
+  getVaultBookmarkById,
+  isVaultBookmark,
+  isVaultFolder,
+  listVaultBookmarksInFolder,
+  movePublicBookmarkToVault,
+  moveVaultBookmark,
+  moveVaultBookmarkToPublic,
+  updateVaultBookmarkContent,
+  updateVaultBookmarkFavorite,
+} from "@/core/database/privateVaultRepository";
+import {
+  getPrivateVaultGeneration,
+  isPrivateVaultGenerationCurrent,
+  isPrivateVaultOpen,
+} from "@/core/database/privateVault";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import { deletePreviewImage } from "@/core/files/previewFileStore";
+import {
+  PUBLIC_BOOKMARK_TRANSFER_FILTER,
+  completeBookmarkTransfer,
+  getBookmarkTransfer,
+  isBookmarkPendingPrivate,
+  isFolderPendingPrivate,
+} from "@/core/database/vaultTransferState";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
 import {
@@ -46,7 +73,8 @@ const PREVIEW_STATUSES: readonly PreviewStatus[] = [
   "failed",
 ];
 
-const PUBLIC_BOOKMARKS_FILTER = "(f.is_private IS NULL OR f.is_private = 0)";
+const PUBLIC_BOOKMARKS_FILTER = `(f.is_private IS NULL OR f.is_private = 0)
+  AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}`;
 
 const BOOKMARK_SELECT = `
 SELECT
@@ -175,12 +203,17 @@ export async function getPublicBookmarkById(
 export async function getReadableBookmarkById(
   id: string
 ): Promise<Bookmark | null> {
+  const generation = getPrivateVaultGeneration();
+  const wasOpen = isPrivateVaultOpen();
   const bookmark = await getBookmarkById(id);
   if (!bookmark) {
     return null;
   }
 
   if (bookmark.folderId) {
+    if (await isVaultFolder(bookmark.folderId)) {
+      return isPrivateSpaceUnlocked() ? bookmark : null;
+    }
     const database = await getDatabase();
     const folder = await database.getFirstAsync<{ isPrivate: number }>(
       "SELECT is_private AS isPrivate FROM folders WHERE id = ?",
@@ -191,6 +224,9 @@ export async function getReadableBookmarkById(
     }
   }
 
+  if (wasOpen && !isPrivateVaultGenerationCurrent(generation)) {
+    return null;
+  }
   return bookmark;
 }
 
@@ -198,6 +234,13 @@ export async function listBookmarksInFolder(
   folderId: string,
   sort: BookmarkSortMode = "recent"
 ): Promise<Bookmark[]> {
+  if (await isFolderPendingPrivate(folderId)) {
+    if (!isPrivateSpaceUnlocked()) {
+      throw new PrivateFolderLockedError();
+    }
+    return listVaultBookmarksInFolder(folderId, sort);
+  }
+
   const database = await getDatabase();
 
   const folder = await database.getFirstAsync<{ isPrivate: number }>(
@@ -205,6 +248,12 @@ export async function listBookmarksInFolder(
     folderId
   );
   if (!folder) {
+    if (await isVaultFolder(folderId)) {
+      if (!isPrivateSpaceUnlocked()) {
+        throw new PrivateFolderLockedError();
+      }
+      return listVaultBookmarksInFolder(folderId, sort);
+    }
     throw new FolderNotFoundError();
   }
   if (folder.isPrivate === 1 && !isPrivateSpaceUnlocked()) {
@@ -214,6 +263,7 @@ export async function listBookmarksInFolder(
   const rows = await database.getAllAsync<BookmarkRow>(
     `${BOOKMARK_SELECT}
      WHERE b.folder_id = ?
+       AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
      ORDER BY ${bookmarkOrderBy(sort)}
      LIMIT ? OFFSET ?`,
     folderId,
@@ -224,6 +274,11 @@ export async function listBookmarksInFolder(
 }
 
 export async function createBookmark(input: CreateBookmarkInput): Promise<Bookmark> {
+  if (input.folderId && (await isFolderPendingPrivate(input.folderId))) {
+    throw new Error(
+      "This folder is still moving to the private vault. Retry after the move finishes."
+    );
+  }
   const database = await getDatabase();
   const id = createId();
   const now = Date.now();
@@ -260,10 +315,17 @@ export async function getBookmarkById(id: string): Promise<Bookmark | null> {
   const database = await getDatabase();
   const row = await database.getFirstAsync<BookmarkRow>(
     `${BOOKMARK_SELECT}
-     WHERE b.id = ?`,
+     WHERE b.id = ? AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}`,
     id
   );
-  return row ? mapBookmarkRow(row) : null;
+  const bookmark = row ? mapBookmarkRow(row) : null;
+  if (bookmark) {
+    return bookmark;
+  }
+  if (isPrivateVaultOpen()) {
+    return getVaultBookmarkById(id);
+  }
+  return null;
 }
 
 /**
@@ -288,20 +350,31 @@ export async function findBookmarkByUrl(rawUrl: string): Promise<Bookmark | null
   return match ? mapBookmarkRow(match) : null;
 }
 
-export async function setBookmarkFavorite(  id: string,
+export async function setBookmarkFavorite(
+  id: string,
   isFavorite: boolean
 ): Promise<void> {
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
-    isFavorite ? 1 : 0,
-    Date.now(),
-    id
-  );
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
+      await updateVaultBookmarkFavorite(id, isFavorite);
+      return;
+    }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
+      isFavorite ? 1 : 0,
+      Date.now(),
+      id
+    );
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
 export async function updateBookmarkContent(
@@ -313,34 +386,84 @@ export async function updateBookmarkContent(
     throw new Error("A bookmark needs a title.");
   }
 
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    `UPDATE bookmarks
-     SET title = ?, title_is_user_edited = 1, note = ?, updated_at = ?
-     WHERE id = ?`,
-    title,
-    input.note,
-    Date.now(),
-    id
-  );
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
+      await updateVaultBookmarkContent(id, { title, note: input.note });
+      return;
+    }
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      `UPDATE bookmarks
+       SET title = ?, title_is_user_edited = 1, note = ?, updated_at = ?
+       WHERE id = ?`,
+      title,
+      input.note,
+      Date.now(),
+      id
+    );
+
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
-export async function moveBookmark(id: string, folderId: string | null): Promise<void> {
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE bookmarks SET folder_id = ?, updated_at = ? WHERE id = ?",
-    folderId,
-    Date.now(),
-    id
-  );
+export async function moveBookmark(
+  id: string,
+  folderId: string | null
+): Promise<void> {
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
+      const database = await getDatabase();
+      const publicSource = await database.getFirstAsync<{ id: string }>(
+        "SELECT id FROM bookmarks WHERE id = ?",
+        id
+      );
+      const targetIsVault = Boolean(folderId && (await isVaultFolder(folderId)));
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+      if (publicSource) {
+        if (targetIsVault && folderId) {
+          await movePublicBookmarkToVault(id, folderId);
+        } else {
+          await moveVaultBookmarkToPublic(id, folderId);
+        }
+        return;
+      }
+
+      if (targetIsVault && folderId) {
+        await moveVaultBookmark(id, folderId);
+        return;
+      }
+      await moveVaultBookmarkToPublic(id, folderId);
+      return;
+    }
+
+    if (folderId && (await isVaultFolder(folderId))) {
+      await movePublicBookmarkToVault(id, folderId);
+      return;
+    }
+
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE bookmarks SET folder_id = ?, updated_at = ? WHERE id = ?",
+      folderId,
+      Date.now(),
+      id
+    );
+
+    if (result.changes === 0) {
+      throw new Error("This bookmark no longer exists.");
+    }
+  });
 }
 
 export async function updateBookmarkPreviewAsset(
@@ -421,12 +544,48 @@ export async function updateBookmarkMetadata(
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
-  const database = await getDatabase();
-  const result = await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+  return withPrivacyWriteLock(async () => {
+    const generation = getPrivateVaultGeneration();
+    const privacy = await getBookmarkPrivacy(id);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    const database = await getDatabase();
+    const publicRow = await database.getFirstAsync<{
+      previewImagePath: string | null;
+    }>(
+      "SELECT preview_image_path AS previewImagePath FROM bookmarks WHERE id = ?",
+      id
+    );
 
-  if (result.changes === 0) {
-    throw new Error("This bookmark no longer exists.");
-  }
+    if (publicRow) {
+      await database.withTransactionAsync(async () => {
+        await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+        await database.runAsync(
+          "DELETE FROM app_settings WHERE key IN (?, ?)",
+          `reader_progress:${id}`,
+          `reader_annotations:${id}`
+        );
+      });
+      if (publicRow.previewImagePath) {
+        deletePreviewImage(publicRow.previewImagePath);
+      }
+    }
+
+    if (await isVaultBookmark(id)) {
+      await deleteVaultBookmark(id);
+    } else if (!publicRow) {
+      throw new Error("This bookmark no longer exists.");
+    }
+
+    if (privacy === "private" && !isPrivateVaultGenerationCurrent(generation)) {
+      throw new Error(
+        "The private session ended during deletion. The deletion is incomplete; retry after unlocking."
+      );
+    }
+
+    await completeBookmarkTransfer(id);
+  });
 }
 
 export async function searchPublicBookmarks(  rawQuery: string,

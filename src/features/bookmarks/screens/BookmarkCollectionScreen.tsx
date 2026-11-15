@@ -8,6 +8,7 @@ import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";
 import { BookmarkSortDialog } from "@/features/bookmarks/components/BookmarkSortDialog";
 import { BookmarkViewSelector } from "@/features/bookmarks/components/BookmarkViewSelector";
 import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
+import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { useBookmarkSortMode } from "@/features/bookmarks/hooks/useBookmarkSortMode";
 import { useBookmarkViewMode } from "@/features/bookmarks/hooks/useBookmarkViewMode";
 import { useCollectionBookmarks } from "@/features/bookmarks/hooks/useCollectionBookmarks";
@@ -39,6 +40,7 @@ type BookmarkCollectionScreenProps = {
 export function BookmarkCollectionScreen({ collection, title }: BookmarkCollectionScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const audioInset = useReaderAudioInset();
   const { sortMode, setSortMode } = useBookmarkSortMode();
   const { bookmarks, status, errorMessage, reload } = useCollectionBookmarks(
     collection,
@@ -149,7 +151,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
         }
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + spacing[6] },
+          { paddingBottom: insets.bottom + spacing[6] + audioInset },
         ]}
         ListEmptyComponent={
           status === "loading" ? (

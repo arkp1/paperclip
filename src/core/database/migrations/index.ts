@@ -115,6 +115,27 @@ const migrations: Migration[] = [
         ADD COLUMN cache_version INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 5,
+    name: "vault_transfer_ownership",
+    sql: `
+      CREATE TABLE IF NOT EXISTS vault_transfers (
+        entity_type TEXT NOT NULL CHECK (entity_type IN ('folder', 'bookmark')),
+        entity_id TEXT NOT NULL,
+        target TEXT NOT NULL CHECK (target IN ('private', 'public')),
+        target_folder_id TEXT,
+        phase TEXT NOT NULL DEFAULT 'copying'
+          CHECK (phase IN ('copying', 'copied')),
+        source_updated_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (entity_type, entity_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_vault_transfers_target
+        ON vault_transfers(target, entity_type);
+    `,
+  },
 ];
 
 /**
