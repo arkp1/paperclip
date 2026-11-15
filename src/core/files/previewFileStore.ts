@@ -42,6 +42,36 @@ export type DownloadedPreviewImage = {
   extension: string;
 };
 
+async function fetchPreviewResponse(
+  imageUrl: string,
+  signal: AbortSignal
+): Promise<Response> {
+  let currentUrl = imageUrl;
+  for (let hop = 0; hop <= 3; hop += 1) {
+    if (!isSafeRemoteHttpUrl(currentUrl)) {
+      throw new Error("Unsupported preview image URL.");
+    }
+    const response = await fetch(currentUrl, {
+      signal,
+      redirect: "manual",
+      headers: { Accept: "image/*" },
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) {
+        throw new Error("Preview image redirect had no destination.");
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+    if (response.url && !isSafeRemoteHttpUrl(response.url)) {
+      throw new Error("Preview image redirected to an unsupported destination.");
+    }
+    return response;
+  }
+  throw new Error("Preview image redirected too many times.");
+}
+
 /**
  * Downloads and validates preview bytes without writing to app storage. Callers
  * can perform the filesystem write under the privacy lock after re-checking
@@ -50,18 +80,11 @@ export type DownloadedPreviewImage = {
 export async function downloadPreviewImage(
   imageUrl: string
 ): Promise<DownloadedPreviewImage> {
-  if (!isSafeRemoteHttpUrl(imageUrl)) {
-    throw new Error("Unsupported preview image URL.");
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(imageUrl, {
-      signal: controller.signal,
-      headers: { Accept: "image/*" },
-    });
+    const response = await fetchPreviewResponse(imageUrl, controller.signal);
 
     if (!response.ok) {
       throw new Error(`Preview image request failed with ${response.status}.`);

@@ -230,9 +230,15 @@ export function PrivateFoldersScreen() {
           }
           void setFolderPrivate(folder.id, false)
             .then(load)
-            .catch(() =>
-              Alert.alert("Private folders", "Could not make this folder public.")
-            );
+            .catch((error: unknown) => {
+              console.warn("Could not make the private folder public.", error);
+              Alert.alert(
+                "Private folders",
+                __DEV__ && error instanceof Error
+                  ? `Could not make this folder public.\n\n${error.message}`
+                  : "Could not make this folder public."
+              );
+            });
         }}
       />
 

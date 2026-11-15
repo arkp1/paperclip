@@ -212,6 +212,12 @@ export const PUBLIC_BOOKMARK_TRANSFER_FILTER = `NOT EXISTS (
   WHERE t.entity_type = 'bookmark'
     AND t.entity_id = b.id
     AND t.target = 'private'
+)
+AND NOT EXISTS (
+  SELECT 1 FROM vault_transfers ft
+  WHERE ft.entity_type = 'folder'
+    AND ft.entity_id = b.folder_id
+    AND ft.target = 'private'
 )`;
 
 export const PUBLIC_FOLDER_TRANSFER_FILTER = `NOT EXISTS (

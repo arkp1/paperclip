@@ -205,8 +205,12 @@ export async function getReadableBookmarkById(
   }
 
   if (bookmark.folderId) {
+    const wasUnlocked = isPrivateSpaceUnlocked();
     if (await isVaultFolder(bookmark.folderId)) {
       return isPrivateSpaceUnlocked() ? bookmark : null;
+    }
+    if (wasUnlocked && !isPrivateSpaceUnlocked()) {
+      return null;
     }
     const database = await getDatabase();
     const folder = await database.getFirstAsync<{ isPrivate: number }>(
@@ -265,6 +269,11 @@ export async function listBookmarksInFolder(
 }
 
 export async function createBookmark(input: CreateBookmarkInput): Promise<Bookmark> {
+  if (input.folderId && (await isFolderPendingPrivate(input.folderId))) {
+    throw new Error(
+      "This folder is still moving to the private vault. Retry after the move finishes."
+    );
+  }
   const database = await getDatabase();
   const id = createId();
   const now = Date.now();

@@ -215,7 +215,7 @@ async function copyPublicBookmarkToVault(
        title_is_user_edited = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.title_is_user_edited ELSE excluded.title_is_user_edited END,
        description = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.description ELSE excluded.description END,
        note = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.note ELSE excluded.note END,
-       folder_id = excluded.folder_id,
+       folder_id = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.folder_id ELSE excluded.folder_id END,
        source_name = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.source_name ELSE excluded.source_name END,
        domain = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.domain ELSE excluded.domain END,
        favicon_path = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.favicon_path ELSE excluded.favicon_path END,
@@ -326,12 +326,12 @@ export async function movePublicFolderToVaultSafe(
        (id, name, icon_key, color_key, sort_order, last_opened_at, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
-         name = excluded.name,
-         icon_key = excluded.icon_key,
-         color_key = excluded.color_key,
-         sort_order = excluded.sort_order,
-         last_opened_at = excluded.last_opened_at,
-         updated_at = excluded.updated_at`,
+         name = CASE WHEN folders.updated_at > excluded.updated_at THEN folders.name ELSE excluded.name END,
+         icon_key = CASE WHEN folders.updated_at > excluded.updated_at THEN folders.icon_key ELSE excluded.icon_key END,
+         color_key = CASE WHEN folders.updated_at > excluded.updated_at THEN folders.color_key ELSE excluded.color_key END,
+         sort_order = CASE WHEN folders.updated_at > excluded.updated_at THEN folders.sort_order ELSE excluded.sort_order END,
+         last_opened_at = CASE WHEN folders.updated_at > excluded.updated_at THEN folders.last_opened_at ELSE excluded.last_opened_at END,
+         updated_at = MAX(folders.updated_at, excluded.updated_at)`,
       folder.id,
       folder.name,
       folder.iconKey,
@@ -430,7 +430,7 @@ async function copyVaultBookmarkToPublic(
        title_is_user_edited = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.title_is_user_edited ELSE excluded.title_is_user_edited END,
        description = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.description ELSE excluded.description END,
        note = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.note ELSE excluded.note END,
-       folder_id = excluded.folder_id,
+       folder_id = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.folder_id ELSE excluded.folder_id END,
        source_name = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.source_name ELSE excluded.source_name END,
        domain = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.domain ELSE excluded.domain END,
        preview_image_path = excluded.preview_image_path,
@@ -874,13 +874,27 @@ export async function deleteVaultFolderSafe(
 ): Promise<void> {
   const vault = await getPrivateVault();
   const main = await getDatabase();
-  const publicBookmarks = await main.getAllAsync<{
-    id: string;
-    previewImagePath: string | null;
-  }>(
-    "SELECT id, preview_image_path AS previewImagePath FROM bookmarks WHERE folder_id = ?",
+  const publicBookmarks = await main.getAllAsync<
+    PublicBookmarkRow & { previewImagePath: string | null }
+  >(
+    `SELECT id, original_url AS originalUrl, canonical_url AS canonicalUrl,
+            title, title_is_user_edited AS titleIsUserEdited, description,
+            note, folder_id AS folderId, source_name AS sourceName, domain,
+            favicon_path AS faviconPath, preview_status AS previewStatus,
+            is_favorite AS isFavorite, created_at AS createdAt,
+            updated_at AS updatedAt,
+            preview_image_path AS previewImagePath
+     FROM bookmarks WHERE folder_id = ?`,
     id
   );
+
+  if (strategy === "keepBookmarks") {
+    for (const bookmark of publicBookmarks) {
+      const previewDataUri = await readPreviewDataUri(bookmark.previewImagePath);
+      await copyPublicBookmarkToVault(vault, bookmark, previewDataUri);
+    }
+  }
+
   await main.withTransactionAsync(async () => {
     for (const bookmark of publicBookmarks) {
       await main.runAsync(

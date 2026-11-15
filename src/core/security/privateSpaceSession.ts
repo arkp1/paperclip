@@ -14,6 +14,7 @@ import {
   migrateLegacyPrivateFoldersToVault,
   recoverPendingTransfers,
 } from "@/core/database/vaultTransfers";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 
 let privateSpaceUnlocked = false;
 let unlockGeneration = 0;
@@ -167,8 +168,10 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
 
   try {
     await openPrivateVaultForSession();
-    await migrateLegacyPrivateFoldersToVault();
-    await recoverPendingTransfers();
+    await withPrivacyWriteLock(async () => {
+      await migrateLegacyPrivateFoldersToVault();
+      await recoverPendingTransfers();
+    });
   } catch (error) {
     if (attempt === unlockGeneration) {
       await closePrivateVault();

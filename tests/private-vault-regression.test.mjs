@@ -47,6 +47,12 @@ WHERE (f.is_private IS NULL OR f.is_private = 0)
       AND t.entity_id = b.id
       AND t.target = 'private'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM vault_transfers ft
+    WHERE ft.entity_type = 'folder'
+      AND ft.entity_id = b.folder_id
+      AND ft.target = 'private'
+  )
 `;
 
 function database() {
@@ -186,6 +192,14 @@ test("reset clears legacy private markers and records transactionally", () => {
   assert.equal(db.prepare("SELECT COUNT(*) AS c FROM bookmarks").get().c, 1);
   assert.equal(db.prepare("SELECT id FROM bookmarks").get().id, "public");
   assert.equal(db.prepare("SELECT COUNT(*) AS c FROM vault_transfers").get().c, 0);
+});
+
+test("a bookmark created after a folder transfer starts is hidden", () => {
+  const db = database();
+  db.prepare("INSERT INTO folders VALUES ('f', 'Work', 0)").run();
+  addTransfer(db, "folder", "f", "private", "f");
+  db.prepare("INSERT INTO bookmarks VALUES ('late', 'Late', NULL, 'f', 1, NULL)").run();
+  assert.equal(db.prepare(PUBLIC_BOOKMARKS).all().length, 0);
 });
 
 test("transfer ownership survives a database restart", () => {

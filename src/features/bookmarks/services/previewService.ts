@@ -53,6 +53,9 @@ export async function enrichBookmarkPreview(
         previewImagePath,
         previewStatus: "success",
         previewFetchedAt: Date.now(),
+      }).catch((error: unknown) => {
+        deletePreviewImage(previewImagePath);
+        throw error;
       });
     });
   } catch (error) {
@@ -99,6 +102,10 @@ export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> 
     if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
       throw new Error("The bookmark moved to the private vault.");
     }
+    const current = await getPublicBookmarkById(bookmarkId);
+    if (!current) {
+      throw new Error("The bookmark is no longer public.");
+    }
 
     let previewImagePath: string | null = null;
     if (downloaded) {
@@ -126,13 +133,18 @@ export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> 
       previewStatus,
       previewFetchedAt: Date.now(),
       previewImagePath,
+    }).catch((error: unknown) => {
+      if (previewImagePath) {
+        deletePreviewImage(previewImagePath);
+      }
+      throw error;
     });
 
     if (
-      bookmark.previewImagePath &&
-      bookmark.previewImagePath !== previewImagePath
+      current.previewImagePath &&
+      current.previewImagePath !== previewImagePath
     ) {
-      deletePreviewImage(bookmark.previewImagePath);
+      deletePreviewImage(current.previewImagePath);
     }
   });
 }

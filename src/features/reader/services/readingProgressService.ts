@@ -34,7 +34,7 @@ export async function loadReadingProgress(
   return withPrivacyWriteLock(async () => {
     const privacy = await getBookmarkPrivacy(bookmarkId);
     if (privacy === "unavailable") {
-      return DEFAULT_PROGRESS;
+      throw new Error("The private vault is locked. Reading progress was not loaded.");
     }
     const raw =
       privacy === "private"
@@ -46,7 +46,7 @@ export async function loadReadingProgress(
     try {
       const parsed: unknown = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") {
-        return DEFAULT_PROGRESS;
+        throw new Error("Reading progress is not an object.");
       }
       const value = parsed as Partial<ReadingProgress>;
       return {
@@ -68,8 +68,9 @@ export async function loadReadingProgress(
           typeof value.updatedAt === "number" ? value.updatedAt : 0,
       };
     } catch (error) {
-      console.warn("Ignoring malformed reading progress.", error);
-      return DEFAULT_PROGRESS;
+      throw new Error(
+        `Reading progress could not be read safely: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   });
 }

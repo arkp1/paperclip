@@ -172,7 +172,11 @@ export async function createVaultFolder(
   name: string,
   colorKey: FolderColorKey
 ): Promise<Folder> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    throw new Error("The private session ended before the folder was created.");
+  }
   const now = Date.now();
   const id = createId();
   try {
