@@ -170,14 +170,21 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     },
   ];
 
-  const keyedBlocks = useMemo(
-    () =>
-      blocks.map((block, index) => ({
+  const keyedBlocks = useMemo(() => {
+    const occurrences = new Map<string, number>();
+    return blocks.map((block) => {
+      const identity =
+        block.type === "image"
+          ? `image:${block.src}:${block.alt}`
+          : `${block.type}:${block.text}`;
+      const occurrence = occurrences.get(identity) ?? 0;
+      occurrences.set(identity, occurrence + 1);
+      return {
         ...block,
-        sourceKey: `block-${index}`,
-      })),
-    [blocks]
-  );
+        sourceKey: stableBlockKey(identity, occurrence),
+      };
+    });
+  }, [blocks]);
   const pages = useMemo(
     () =>
       preferences.paginate
@@ -299,7 +306,22 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
 
   useEffect(() => {
     let active = true;
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    latestProgress.current = null;
+    lastSavedProgress.current = -1;
+    savedProgressRef.current = null;
+    blockPositions.current.clear();
     restoredRef.current = false;
+    setAnnotations([]);
+    setAnnotationsStatus("loading");
+    setAnnotationVisible(false);
+    setAnnotationKey(null);
+    setAnnotateMode(false);
+    setViewerImage(null);
+    setSearchVisible(false);
     setProgressHydrated(false);
     setReadingProgress(0);
     setCompleted(false);
@@ -367,8 +389,14 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     }
   }, [
     contentHeight,
+    fontFamily,
     pages,
+    preferences.align,
+    preferences.fontSize,
+    preferences.lineHeight,
     preferences.paginate,
+    preferences.paragraphSpacing,
+    preferences.width,
     progressHydrated,
     status,
     viewportHeight,
@@ -1055,7 +1083,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
                 setViewportHeight(event.nativeEvent.layout.height);
               }}
             >
-              {renderContent(blocks, true)}
+              {renderContent(keyedBlocks, true)}
             </ScrollView>
           )}
 
@@ -1307,6 +1335,15 @@ function ArticleImageBlock({
  * Groups article blocks into swipe-sized pages. This is an estimate based on
  * font size and viewport; each page is a non-scrolling horizontal page.
  */
+function stableBlockKey(identity: string, occurrence: number): string {
+  let hash = 2166136261;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `block-${(hash >>> 0).toString(36)}-${occurrence}`;
+}
+
 function paginate(
   blocks: ArticleBlock[],
   fontSize: number,

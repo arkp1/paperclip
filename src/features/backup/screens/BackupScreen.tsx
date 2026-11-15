@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   applyBackup,
@@ -22,6 +23,7 @@ import { useTheme } from "@/theme";
 export function BackupScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const audioInset = useReaderAudioInset();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -92,7 +94,10 @@ export function BackupScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: audioInset + 24 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: audioInset + insets.bottom + 24 },
+        ]}
       >
         <View
           style={[

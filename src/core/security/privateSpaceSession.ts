@@ -9,7 +9,10 @@ import {
   openPrivateVaultForSession,
   revokePrivateVaultSession,
 } from "@/core/database/privateVault";
-import { migrateLegacyPrivateFoldersToVault } from "@/core/database/vaultTransfers";
+import {
+  migrateLegacyPrivateFoldersToVault,
+  recoverPendingTransfers,
+} from "@/core/database/vaultTransfers";
 
 let privateSpaceUnlocked = false;
 let unlockGeneration = 0;
@@ -164,6 +167,7 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   try {
     await openPrivateVaultForSession();
     await migrateLegacyPrivateFoldersToVault();
+    await recoverPendingTransfers();
   } catch (error) {
     await closePrivateVault();
     console.warn("The private vault could not be opened.", error);

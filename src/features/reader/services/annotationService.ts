@@ -66,27 +66,35 @@ export function contentAnnotationKey(block: {
 export async function loadAnnotations(
   bookmarkId: string
 ): Promise<ReaderAnnotation[]> {
-  const privacy = await getBookmarkPrivacy(bookmarkId);
-  if (privacy === "unavailable") {
-    throw new Error("The private vault is locked.");
-  }
-  const raw =
-    privacy === "private"
-      ? await getVaultSetting(keyFor(bookmarkId))
-      : await getSetting(keyFor(bookmarkId));
-  if (!raw) {
-    return [];
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    const raw =
+      privacy === "private"
+        ? await getVaultSetting(keyFor(bookmarkId))
+        : await getSetting(keyFor(bookmarkId));
+    if (!raw) {
       return [];
     }
-    return parsed.filter(isAnnotation);
-  } catch (error) {
-    console.warn("Ignoring malformed reader annotations.", error);
-    return [];
-  }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      throw new Error(
+        `Reader annotations are malformed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (!Array.isArray(parsed)) {
+      throw new Error("Reader annotations are not an array.");
+    }
+    const annotations = parsed.filter(isAnnotation);
+    if (annotations.length !== parsed.length) {
+      throw new Error("Reader annotations contain invalid entries.");
+    }
+    return annotations;
+  });
 }
 
 export async function saveAnnotations(

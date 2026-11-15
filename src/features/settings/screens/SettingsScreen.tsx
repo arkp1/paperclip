@@ -23,6 +23,7 @@ import { styles } from "@/styles/features/settings/SettingsScreen.styles";
 import { accentOptions, accentSwatch, useTheme } from "@/theme";
 import type { ThemeMode } from "@/theme/ThemeProvider";
 import { resetPrivateVault } from "@/core/database/privateVault";
+import { resetLegacyPrivateDataInPublicDatabase } from "@/core/database/vaultTransfers";
 import { lockPrivateSpace } from "@/core/security/privateSpaceSession";
 
 const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
@@ -327,11 +328,12 @@ export function SettingsScreen() {
                     style: "destructive",
                     onPress: () => {
                       lockPrivateSpace();
-                      void resetPrivateVault()
+                      void resetLegacyPrivateDataInPublicDatabase()
+                        .then(() => resetPrivateVault())
                         .then(() =>
                           Alert.alert(
                             "Private vault reset",
-                            "The encrypted private vault was removed."
+                            "The encrypted private vault and legacy private data were removed."
                           )
                         )
                         .catch(() =>

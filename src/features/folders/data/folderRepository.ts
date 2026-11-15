@@ -14,6 +14,7 @@ import {
 } from "@/core/database/privateVaultRepository";
 import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import { PUBLIC_FOLDER_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -103,6 +104,7 @@ export async function getAllFolders(): Promise<Folder[]> {
   const rows = await database.getAllAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.is_private = 0
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id
      ORDER BY f.sort_order ASC, f.name COLLATE NOCASE ASC`
   );
@@ -134,6 +136,7 @@ export async function getRecentFolders(limit: number): Promise<Folder[]> {
   const rows = await database.getAllAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.is_private = 0
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id
      ORDER BY COALESCE(f.last_opened_at, f.created_at) DESC
      LIMIT ?`,
@@ -169,41 +172,41 @@ export async function setFolderPrivate(
   folderId: string,
   isPrivate: boolean
 ): Promise<void> {
-  if (isPrivate) {
-    if (!isPrivateSpaceUnlocked()) {
-      throw new Error("Unlock the private space first.");
-    }
-    if (await isVaultFolder(folderId)) {
-      const database = await getDatabase();
-      const publicSource = await database.getFirstAsync<{ id: string }>(
-        "SELECT id FROM folders WHERE id = ? AND is_private = 0",
-        folderId
-      );
-      if (!publicSource) {
-        return;
+  return withPrivacyWriteLock(async () => {
+    if (isPrivate) {
+      if (!isPrivateSpaceUnlocked()) {
+        throw new Error("Unlock the private space first.");
       }
+      if (await isVaultFolder(folderId)) {
+        const database = await getDatabase();
+        const publicSource = await database.getFirstAsync<{ id: string }>(
+          "SELECT id FROM folders WHERE id = ? AND is_private = 0",
+          folderId
+        );
+        if (!publicSource) {
+          return;
+        }
+      }
+      await movePublicFolderToVault(folderId);
+      return;
     }
-    await withPrivacyWriteLock(() =>
-      movePublicFolderToVault(folderId)
+
+    if (await isVaultFolder(folderId)) {
+      await moveVaultFolderToPublic(folderId);
+      return;
+    }
+
+    const database = await getDatabase();
+    const result = await database.runAsync(
+      "UPDATE folders SET is_private = 0, updated_at = ? WHERE id = ?",
+      Date.now(),
+      folderId
     );
-    return;
-  }
 
-  if (await isVaultFolder(folderId)) {
-    await withPrivacyWriteLock(() => moveVaultFolderToPublic(folderId));
-    return;
-  }
-
-  const database = await getDatabase();
-  const result = await database.runAsync(
-    "UPDATE folders SET is_private = 0, updated_at = ? WHERE id = ?",
-    Date.now(),
-    folderId
-  );
-
-  if (result.changes === 0) {
-    throw new FolderNotFoundError();
-  }
+    if (result.changes === 0) {
+      throw new FolderNotFoundError();
+    }
+  });
 }
 
 export async function getFolderById(id: string): Promise<Folder | null> {
@@ -211,6 +214,7 @@ export async function getFolderById(id: string): Promise<Folder | null> {
   const row = await database.getFirstAsync<FolderRow>(
     `${FOLDER_SELECT}
      WHERE f.id = ?
+       AND ${PUBLIC_FOLDER_TRANSFER_FILTER}
      GROUP BY f.id`,
     id
   );
@@ -286,14 +290,12 @@ export async function renameFolder(id: string, name: string): Promise<void> {
     throw new InvalidFolderNameError(validation.message);
   }
 
-  if (await isVaultFolder(id)) {
-    await withPrivacyWriteLock(() =>
-      updateVaultFolderName(id, validation.name)
-    );
-    return;
-  }
-
   return withPrivacyWriteLock(async () => {
+    if (await isVaultFolder(id)) {
+      await updateVaultFolderName(id, validation.name);
+      return;
+    }
+
     const database = await getDatabase();
 
     try {

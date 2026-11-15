@@ -1,6 +1,8 @@
 import { getDatabase } from "@/core/database/database";
 import {
   getPrivateVault,
+  getPrivateVaultGeneration,
+  isPrivateVaultGenerationCurrent,
   isPrivateVaultOpen,
 } from "@/core/database/privateVault";
 import { createId } from "@/core/utils/id";
@@ -26,6 +28,7 @@ import {
   moveVaultBookmarkToPublicSafe,
   moveVaultFolderToPublicSafe,
 } from "@/core/database/vaultTransfers";
+import { getBookmarkTransfer } from "@/core/database/vaultTransferState";
 
 type FolderRow = {
   id: string;
@@ -119,12 +122,16 @@ LEFT JOIN bookmarks b ON b.folder_id = f.id
 `;
 
 export async function getVaultFolders(): Promise<Folder[]> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const rows = await database.getAllAsync<FolderRow>(
     `${VAULT_FOLDER_SELECT}
      GROUP BY f.id
      ORDER BY f.sort_order ASC, f.name COLLATE NOCASE ASC`
   );
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    return [];
+  }
   return rows.map(mapFolder);
 }
 
@@ -132,17 +139,19 @@ export async function countVaultFolders(): Promise<number> {
   if (!isPrivateVaultOpen()) {
     return 0;
   }
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<{ count: number }>(
     "SELECT COUNT(*) AS count FROM folders"
   );
-  return row?.count ?? 0;
+  return isPrivateVaultGenerationCurrent(generation) ? (row?.count ?? 0) : 0;
 }
 
 export async function getVaultFolderById(id: string): Promise<Folder | null> {
   if (!isPrivateVaultOpen()) {
     return null;
   }
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<FolderRow>(
     `${VAULT_FOLDER_SELECT}
@@ -150,6 +159,9 @@ export async function getVaultFolderById(id: string): Promise<Folder | null> {
      GROUP BY f.id`,
     id
   );
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    return null;
+  }
   return row ? mapFolder(row) : null;
 }
 
@@ -250,6 +262,7 @@ export async function listVaultBookmarksInFolder(
   folderId: string,
   sort: BookmarkSortMode
 ): Promise<Bookmark[]> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const order =
     sort === "oldest"
@@ -270,6 +283,9 @@ export async function listVaultBookmarksInFolder(
      ORDER BY ${order}`,
     folderId
   );
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    return [];
+  }
   return rows.map(mapBookmark);
 }
 
@@ -279,6 +295,7 @@ export async function getVaultBookmarkById(
   if (!isPrivateVaultOpen()) {
     return null;
   }
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<BookmarkRow>(
     `SELECT
@@ -291,6 +308,9 @@ export async function getVaultBookmarkById(
      FROM bookmarks b WHERE b.id = ?`,
     id
   );
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    return null;
+  }
   return row ? mapBookmark(row) : null;
 }
 
@@ -298,12 +318,13 @@ export async function isVaultFolder(id: string): Promise<boolean> {
   if (!isPrivateVaultOpen()) {
     return false;
   }
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<{ id: string }>(
     "SELECT id FROM folders WHERE id = ?",
     id
   );
-  return Boolean(row);
+  return isPrivateVaultGenerationCurrent(generation) && Boolean(row);
 }
 
 export async function updateVaultBookmarkFavorite(
@@ -344,7 +365,14 @@ export async function updateVaultBookmarkContent(
 
 export async function deleteVaultBookmark(id: string): Promise<void> {
   const database = await getPrivateVault();
-  await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+  await database.withTransactionAsync(async () => {
+    await database.runAsync(
+      "DELETE FROM app_settings WHERE key IN (?, ?)",
+      `reader_progress:${id}`,
+      `reader_annotations:${id}`
+    );
+    await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
+  });
 }
 
 export async function moveVaultBookmark(
@@ -376,12 +404,13 @@ export async function isVaultBookmark(id: string): Promise<boolean> {
   if (!isPrivateVaultOpen()) {
     return false;
   }
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<{ id: string }>(
     "SELECT id FROM bookmarks WHERE id = ?",
     id
   );
-  return Boolean(row);
+  return isPrivateVaultGenerationCurrent(generation) && Boolean(row);
 }
 
 export type BookmarkPrivacy = "private" | "public" | "unavailable";
@@ -394,17 +423,36 @@ export type BookmarkPrivacy = "private" | "public" | "unavailable";
 export async function getBookmarkPrivacy(
   id: string
 ): Promise<BookmarkPrivacy> {
+  const transfer = await getBookmarkTransfer(id);
+  if (transfer?.target === "private") {
+    return isPrivateVaultOpen() ? "private" : "unavailable";
+  }
+
+  const main = await getDatabase();
+  if (transfer?.target === "public") {
+    const publicRow = await main.getFirstAsync<{ id: string }>(
+      "SELECT id FROM bookmarks WHERE id = ?",
+      id
+    );
+    if (publicRow) {
+      return "public";
+    }
+  }
+
   if (isPrivateVaultOpen()) {
+    const generation = getPrivateVaultGeneration();
     const privateDatabase = await getPrivateVault();
     const privateRow = await privateDatabase.getFirstAsync<{ id: string }>(
       "SELECT id FROM bookmarks WHERE id = ?",
       id
     );
+    if (!isPrivateVaultGenerationCurrent(generation)) {
+      return "unavailable";
+    }
     if (privateRow) {
       return "private";
     }
   }
-  const main = await getDatabase();
   const publicRow = await main.getFirstAsync<{ isPrivate: number }>(
     `SELECT COALESCE(f.is_private, 0) AS isPrivate
      FROM bookmarks b
@@ -486,13 +534,23 @@ export async function getVaultArticle(
   fetchedAt: number;
   cacheVersion: number;
 } | null> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
-  return database.getFirstAsync(
+  const row = await database.getFirstAsync<{
+    blocks: string;
+    wordCount: number;
+    fetchedAt: number;
+    cacheVersion: number;
+  }>(
     `SELECT blocks, word_count AS wordCount, fetched_at AS fetchedAt,
             cache_version AS cacheVersion
      FROM article_contents WHERE bookmark_id = ?`,
     bookmarkId
   );
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    return null;
+  }
+  return row;
 }
 
 export async function saveVaultArticle(

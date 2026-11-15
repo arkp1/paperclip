@@ -50,10 +50,12 @@ export function ReaderImageViewer({
   const startScale = useSharedValue(1);
 
   useEffect(() => {
+    scale.value = 1;
+    startScale.value = 1;
     setLoading(Boolean(source));
     setFailed(false);
     setRetryToken((token) => token + 1);
-  }, [source, visible]);
+  }, [source, visible, scale, startScale]);
 
   const pinch = Gesture.Pinch()
     .onBegin(() => {

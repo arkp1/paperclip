@@ -60,8 +60,10 @@ export function DeleteFolderDialog({
       description={
         hasBookmarks
           ? allowKeepBookmarks
-            ? "Choose what happens to the links in this folder. Nothing is deleted until you confirm."
-            : "Private links cannot be moved to public Uncategorized. Deleting this folder also deletes its private links."
+            ? folder.isPrivate
+              ? "Links can stay private. Choose whether to keep them in a private folder or delete them with this folder."
+              : "Choose what happens to the links in this folder. Nothing is deleted until you confirm."
+            : "This folder and its links cannot be preserved by this action."
           : "This folder is empty. Deleting it cannot be undone."
       }
       actions={
@@ -71,7 +73,11 @@ export function DeleteFolderDialog({
               {allowKeepBookmarks ? (
                 <View style={styles.option}>
                   <Button
-                    label="Move links to Uncategorized"
+                    label={
+                      folder.isPrivate
+                        ? "Keep links in Private"
+                        : "Move links to Uncategorized"
+                    }
                     variant="tonal"
                     onPress={() => {
                       void run("keepBookmarks");
@@ -83,7 +89,9 @@ export function DeleteFolderDialog({
                     variant="bodySmall"
                     color={theme.colors.onSurfaceVariant}
                   >
-                    Recommended — every saved link is kept.
+                    {folder.isPrivate
+                      ? "Every saved link stays private in “Private kept links”."
+                      : "Recommended — every saved link is kept."}
                   </AppText>
                 </View>
               ) : null}

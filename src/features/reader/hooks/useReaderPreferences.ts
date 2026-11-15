@@ -94,8 +94,12 @@ function isReaderAlign(value: string | null): value is ReaderAlign {
 export function useReaderPreferences() {
   const [preferences, setPreferences] = useState<ReaderPreferences>(DEFAULTS);
   const changedFields = useRef(new Set<keyof ReaderPreferences>());
+  const latestValues = useRef(new Map<AppSettingKey, string>());
 
   const reportSaveError = (key: AppSettingKey, value: string) => {
+    if (latestValues.current.get(key) !== value) {
+      return;
+    }
     Alert.alert(
       "Reader settings",
       "The setting changed for this session but could not be saved.",
@@ -104,6 +108,9 @@ export function useReaderPreferences() {
         {
           text: "Retry",
           onPress: () => {
+            if (latestValues.current.get(key) !== value) {
+              return;
+            }
             void setSetting(key, value).catch(() =>
               reportSaveError(key, value)
             );
@@ -114,6 +121,7 @@ export function useReaderPreferences() {
   };
 
   const persist = (key: AppSettingKey, value: string) => {
+    latestValues.current.set(key, value);
     void setSetting(key, value).catch(() => reportSaveError(key, value));
   };
 

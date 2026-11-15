@@ -1,4 +1,5 @@
 import { getDatabase } from "@/core/database/database";
+import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import {
   getBookmarkPrivacy,
   getVaultArticle,
@@ -134,35 +135,37 @@ async function saveArticle(
   bookmarkId: string,
   article: CachedArticle
 ): Promise<void> {
-  const privacy = await getBookmarkPrivacy(bookmarkId);
-  if (privacy === "unavailable") {
-    throw new Error("The private vault is locked.");
-  }
-  if (privacy === "private") {
-    await saveVaultArticle(
+  return withPrivacyWriteLock(async () => {
+    const privacy = await getBookmarkPrivacy(bookmarkId);
+    if (privacy === "unavailable") {
+      throw new Error("The private vault is locked.");
+    }
+    if (privacy === "private") {
+      await saveVaultArticle(
+        bookmarkId,
+        JSON.stringify(article.blocks),
+        article.wordCount,
+        article.fetchedAt,
+        ARTICLE_CACHE_VERSION
+      );
+      return;
+    }
+    const database = await getDatabase();
+    await database.runAsync(
+      `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(bookmark_id) DO UPDATE SET
+         blocks = excluded.blocks,
+         word_count = excluded.word_count,
+         fetched_at = excluded.fetched_at,
+         cache_version = excluded.cache_version`,
       bookmarkId,
       JSON.stringify(article.blocks),
       article.wordCount,
       article.fetchedAt,
       ARTICLE_CACHE_VERSION
     );
-    return;
-  }
-  const database = await getDatabase();
-  await database.runAsync(
-    `INSERT INTO article_contents (bookmark_id, blocks, word_count, fetched_at, cache_version)
-     VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(bookmark_id) DO UPDATE SET
-       blocks = excluded.blocks,
-       word_count = excluded.word_count,
-       fetched_at = excluded.fetched_at,
-       cache_version = excluded.cache_version`,
-    bookmarkId,
-    JSON.stringify(article.blocks),
-    article.wordCount,
-    article.fetchedAt,
-    ARTICLE_CACHE_VERSION
-  );
+  });
 }
 
 async function fetchArticle(url: string): Promise<CachedArticle> {

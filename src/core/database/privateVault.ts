@@ -8,6 +8,7 @@ const VAULT_KEY_NAME = "paperclip.private.vault.key.v1";
 
 let vaultPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 let sessionAuthorized = false;
+let sessionGeneration = 0;
 
 const VAULT_SCHEMA = `
 CREATE TABLE IF NOT EXISTS folders (
@@ -175,10 +176,26 @@ async function openAndPrepareVault(): Promise<SQLite.SQLiteDatabase> {
 
 export function authorizePrivateVaultSession(): void {
   sessionAuthorized = true;
+  sessionGeneration += 1;
 }
 
 export function revokePrivateVaultSession(): void {
   sessionAuthorized = false;
+  sessionGeneration += 1;
+}
+
+export function getPrivateVaultGeneration(): number {
+  return sessionGeneration;
+}
+
+export function isPrivateVaultGenerationCurrent(generation: number): boolean {
+  return sessionAuthorized && generation === sessionGeneration;
+}
+
+export function assertPrivateVaultGeneration(generation: number): void {
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    throw new Error("The private vault session is no longer valid.");
+  }
 }
 
 export async function openPrivateVaultForSession(): Promise<SQLite.SQLiteDatabase> {
@@ -234,11 +251,13 @@ export async function resetPrivateVault(): Promise<void> {
 }
 
 export async function getVaultSetting(key: string): Promise<string | null> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
   const row = await database.getFirstAsync<{ value: string }>(
     "SELECT value FROM app_settings WHERE key = ?",
     key
   );
+  assertPrivateVaultGeneration(generation);
   return row?.value ?? null;
 }
 
@@ -246,7 +265,9 @@ export async function setVaultSetting(
   key: string,
   value: string
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertPrivateVaultGeneration(generation);
   await database.runAsync(
     `INSERT INTO app_settings (key, value, updated_at)
      VALUES (?, ?, ?)

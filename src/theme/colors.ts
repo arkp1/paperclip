@@ -141,7 +141,10 @@ export const defaultFolderColorKey: FolderColorKey = "lavender";
 const folderColorKeys = Object.keys(folderColors) as FolderColorKey[];
 
 export function isFolderColorKey(value: unknown): value is FolderColorKey {
-  return typeof value === "string" && value in folderColors;
+  return (
+    typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(folderColors, value)
+  );
 }
 
 /** Stable accent for a folder that has no colour assigned yet. */

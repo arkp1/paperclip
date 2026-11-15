@@ -81,6 +81,8 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     if (folder?.isPrivate && !isUnlocked) {
       setSelectedBookmark(null);
       setActionsVisible(false);
+      setRenameVisible(false);
+      setDeleteVisible(false);
       router.back();
     }
   }, [folder?.isPrivate, isUnlocked, router]);
@@ -214,7 +216,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
         <BookmarkViewSelector viewMode={viewMode} onChange={handleViewModeChange} />
       ) : null}
 
-      {status === "loading" ? (
+      {status === "loading" || (folder?.isPrivate && !isUnlocked) ? (
         <LoadingState message="Opening folder…" />
       ) : status === "not_found" || status === "error" ? (
         <ErrorState
@@ -342,7 +344,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       <DeleteFolderDialog
         folder={folder}
         visible={deleteVisible}
-        allowKeepBookmarks={!folder?.isPrivate}
+        allowKeepBookmarks
         onClose={() => setDeleteVisible(false)}
         onConfirm={handleDelete}
       />

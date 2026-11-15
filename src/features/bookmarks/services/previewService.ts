@@ -2,10 +2,11 @@ import { getDatabase } from "@/core/database/database";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
 import {
   getBookmarkPrivacy,
-  isVaultBookmark,
 } from "@/core/database/privateVaultRepository";
+import { PUBLIC_BOOKMARK_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
 import {
   getBookmarkById,
+  getPublicBookmarkById,
   deleteBookmark,
   markBookmarkPreviewFailed,
   updateBookmarkMetadata,
@@ -70,17 +71,17 @@ export async function enrichBookmarkPreview(
  * Re-fetches metadata and the preview image for an existing public bookmark.
  */
 export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> {
-  if (await isVaultBookmark(bookmarkId)) {
-    throw new Error("Private previews stay inside the encrypted vault.");
-  }
-  const bookmark = await getBookmarkById(bookmarkId);
-  if (!bookmark) {
-    throw new Error("This bookmark no longer exists.");
-  }
-
-  const metadata = await fetchLinkMetadata(bookmark.originalUrl);
-
   await withPrivacyWriteLock(async () => {
+    const bookmark = await getPublicBookmarkById(bookmarkId);
+    if (!bookmark) {
+      throw new Error("This bookmark is not public.");
+    }
+    if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
+      throw new Error("Private previews stay inside the encrypted vault.");
+    }
+
+    const metadata = await fetchLinkMetadata(bookmark.originalUrl);
+
     if ((await getBookmarkPrivacy(bookmarkId)) !== "public") {
       throw new Error("The bookmark moved to the private vault.");
     }
@@ -147,6 +148,7 @@ export async function refreshMissingPreviews(limit = 30): Promise<void> {
      FROM bookmarks b
      LEFT JOIN folders f ON f.id = b.folder_id
      WHERE (f.is_private IS NULL OR f.is_private = 0)
+       AND ${PUBLIC_BOOKMARK_TRANSFER_FILTER}
        AND (
          b.preview_image_path IS NULL
          OR b.preview_status IN ('pending', 'partial', 'failed')
