@@ -45,12 +45,30 @@ const DEFAULTS: ReaderPreferences = {
 
 export function readerFontFamily(font: ReaderFont): string {
   if (font === "serif") {
-    return "serif";
+    return "NotoSerif-Regular";
   }
   if (font === "mono") {
-    return "monospace";
+    return "JetBrainsMono-Regular";
   }
   return "GoogleSansFlex-Regular";
+}
+
+/**
+ * Serif and mono faces have different vertical metrics than Google Sans Flex.
+ * Keep the user's saved multiplier as the sans baseline and normalize it so a
+ * line-height choice remains visually consistent across typefaces.
+ */
+export function readerLineHeightMultiplier(
+  font: ReaderFont,
+  lineHeight: number
+): number {
+  if (font === "serif") {
+    return lineHeight * (1.55 / 1.72);
+  }
+  if (font === "mono") {
+    return lineHeight * (1.6 / 1.72);
+  }
+  return lineHeight;
 }
 
 export function readerPalette(background: ReaderBackground) {

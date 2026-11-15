@@ -37,6 +37,7 @@ import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
 import { useArticleReader } from "@/features/reader/hooks/useArticleReader";
 import {
   readerFontFamily,
+  readerLineHeightMultiplier,
   readerPalette,
   useReaderPreferences,
 } from "@/features/reader/hooks/useReaderPreferences";
@@ -96,6 +97,12 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const { play: playAudio, clear: clearAudio } = useReaderAudio();
   const palette = readerPalette(preferences.background);
   const fontFamily = readerFontFamily(preferences.font);
+  const lineHeightMultiplier = readerLineHeightMultiplier(
+    preferences.font,
+    preferences.lineHeight
+  );
+  const charWidthFactor =
+    preferences.font === "mono" ? 0.6 : preferences.font === "serif" ? 0.52 : 0.54;
   const { isUnlocked } = usePrivateSpaceSession();
   const previousUnlocked = useRef(isUnlocked);
   const [bookmarkIsPrivate, setBookmarkIsPrivate] = useState(false);
@@ -161,7 +168,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     fontFamily,
     fontWeight: "normal" as const,
     fontSize: preferences.fontSize,
-    lineHeight: Math.round(preferences.fontSize * preferences.lineHeight),
+    lineHeight: Math.round(preferences.fontSize * lineHeightMultiplier),
     textAlign: preferences.align,
     color: palette.text,
   };
@@ -197,7 +204,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             Math.max(220, contentWidth),
             height,
             preferences.lineHeight,
-            preferences.paragraphSpacing
+            preferences.paragraphSpacing,
+            charWidthFactor
           )
         : [],
     [
@@ -205,6 +213,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       contentWidth,
       preferences.fontSize,
       preferences.lineHeight,
+      preferences.font,
       preferences.paragraphSpacing,
       height,
       preferences.paginate,
@@ -808,7 +817,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     fontWeight: "700" as const,
     fontSize: preferences.fontSize + 4,
     lineHeight: Math.round(
-      (preferences.fontSize + 4) * preferences.lineHeight
+      (preferences.fontSize + 4) * lineHeightMultiplier
     ),
     marginTop: 18,
   };
@@ -855,6 +864,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
               block={block}
               paginated={paginated}
               captionColor={palette.muted}
+              fontFamily={fontFamily}
               onOpen={(image) => setViewerImage(image)}
             />
           );
@@ -1077,7 +1087,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
         <>
           {preferences.paginate && hasPaginatedContent ? (
             <FlatList
-              key={`${fontFamily}-${preferences.fontSize}-${preferences.lineHeight}`}
+              key="reader-pages"
               ref={pagesRef}
               data={pages}
               horizontal
@@ -1111,7 +1121,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             />
           ) : (
             <ScrollView
-              key={`${fontFamily}-${preferences.fontSize}-${preferences.lineHeight}`}
+              key="reader-scroll"
               ref={scrollRef}
               contentContainerStyle={sharedContentStyle}
               showsVerticalScrollIndicator={false}
@@ -1142,7 +1152,12 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
                   },
                 ]}
               >
-                <Text style={[styles.pageIndicator, { color: palette.muted }]}>
+                <Text
+                  style={[
+                    styles.pageIndicator,
+                    { color: palette.muted, fontFamily },
+                  ]}
+                >
                   {Math.min(pageIndex + 1, pages.length)} / {pages.length} ·{" "}
                   {Math.round(displayProgress * 100)}%
                 </Text>
@@ -1328,11 +1343,13 @@ function ArticleImageBlock({
   block,
   paginated,
   captionColor,
+  fontFamily,
   onOpen,
 }: {
   block: Extract<ArticleBlock, { type: "image" }>;
   paginated: boolean;
   captionColor: string;
+  fontFamily: string;
   onOpen: (image: { src: string; alt: string }) => void;
 }) {
   const [hidden, setHidden] = useState(false);
@@ -1363,7 +1380,9 @@ function ArticleImageBlock({
           onError={() => setHidden(true)}
         />
         {block.alt && block.alt !== "Article image" ? (
-          <Text style={[styles.caption, { color: captionColor }]}>
+          <Text
+            style={[styles.caption, { color: captionColor, fontFamily }]}
+          >
             {block.alt}
           </Text>
         ) : null}
@@ -1391,11 +1410,12 @@ function paginate(
   width: number,
   height: number,
   lineHeightMultiplier: number,
-  paragraphSpacing: number
+  paragraphSpacing: number,
+  charWidthFactor: number
 ): ReaderPage[] {
   const lineHeight = fontSize * lineHeightMultiplier;
   const contentHeight = Math.max(260, height - 250);
-  const charsPerLine = Math.max(18, width / (fontSize * 0.54));
+  const charsPerLine = Math.max(18, width / (fontSize * charWidthFactor));
   const viewportBudget = Math.max(
     280,
     Math.floor((contentHeight / lineHeight) * charsPerLine * 0.82)
