@@ -10,17 +10,20 @@ the source of truth and the library works offline.
 
 ## Screenshots
 
-Runtime screenshots have not been captured automatically because the app
-requires a native development build and a connected Android device. The images
-below are the Figma design references kept in this repository; they are not
-current runtime captures.
+Runtime screenshots from the Android development build, in app order:
 
 <table>
   <tr>
-    <td><img src="docs/figma/01%20%E2%80%94%20Library.png" width="240" alt="Library design reference" /></td>
-    <td><img src="docs/figma/03%20%E2%80%94%20Folder%20detail.png" width="240" alt="Folder detail design reference" /></td>
-    <td><img src="docs/figma/08%20%E2%80%94%20Settings.png" width="240" alt="Settings design reference" /></td>
-    <td><img src="docs/figma/10%20%E2%80%94%20Dark%20theme.png" width="240" alt="Dark theme design reference" /></td>
+    <td><img src="docs/screenshots/home.jpg" width="220" alt="Home screen with search, recent folders, and recently saved links" /></td>
+    <td><img src="docs/screenshots/folders.jpg" width="220" alt="Folders screen with collections and user folders" /></td>
+    <td><img src="docs/screenshots/reader.jpg" width="220" alt="Distraction-free reader with serif typography" /></td>
+    <td><img src="docs/screenshots/settings.jpg" width="220" alt="Settings screen with appearance and privacy controls" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Home</sub></td>
+    <td align="center"><sub>Folders</sub></td>
+    <td align="center"><sub>Reader</sub></td>
+    <td align="center"><sub>Settings</sub></td>
   </tr>
 </table>
 
