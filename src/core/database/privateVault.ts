@@ -112,9 +112,7 @@ async function assertVaultFileIsEncrypted(
   if (!file.exists) {
     throw new Error("The private vault file does not exist.");
   }
-  const header = new Uint8Array(
-    await file.slice(0, 16).arrayBuffer()
-  ).slice(0, 16);
+  const header = (await file.bytes()).slice(0, 16);
   const plaintextHeader = [
     0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61,
     0x74, 0x20, 0x33, 0x00,

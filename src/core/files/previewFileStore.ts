@@ -106,7 +106,7 @@ export async function writePreviewImageBytes(
     .slice(2, 8)}.${image.extension}`;
   const file = new File(directory, filename);
   file.create({ intermediates: true });
-  await file.write(image.bytes);
+  await file.write(new Uint8Array(image.bytes));
   return `${PREVIEW_DIRECTORY_PATH}/${filename}`;
 }
 
