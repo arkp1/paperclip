@@ -41,6 +41,7 @@ import { ReaderSearchBar } from "@/features/reader/components/ReaderSearchBar";
 import { ReaderSettingsSheet } from "@/features/reader/components/ReaderSettingsSheet";
 import { useReaderAudio } from "@/features/reader/audio/ReaderAudioProvider";
 import { useArticleReader } from "@/features/reader/hooks/useArticleReader";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import {
   readerFontFamily,
   readerLineHeightMultiplier,
@@ -426,7 +427,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           );
         }
       });
-      router.back();
+      navigateBack(router);
     });
   }, [bookmark, fallbackToOriginal, router]);
 
@@ -876,7 +877,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       setAnnotateMode(false);
       clearAudio();
       if (bookmarkIsPrivate) {
-        router.back();
+        navigateBack(router);
       } else {
         void reload();
       }
@@ -922,7 +923,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           onPress: () => {
             clearAudio();
             void deleteBookmarkWithAssets(bookmark.id)
-              .then(() => router.back())
+              .then(() => navigateBack(router))
               .catch(() => Alert.alert("Delete", "Could not delete this link."));
           },
         },
@@ -1087,7 +1088,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
           title="Read"
           icon="book-open-page-variant-outline"
           foregroundColor={palette.text}
-          onBack={() => router.back()}
+          onBack={() => navigateBack(router)}
           actions={
             bookmark && (status === "ready" || status === "error") ? (
               <View style={styles.headerActions}>

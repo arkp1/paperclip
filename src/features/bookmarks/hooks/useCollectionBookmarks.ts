@@ -11,6 +11,7 @@ import type {
   BookmarkView,
 } from "@/features/bookmarks/types";
 import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
+import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 const PAGE_SIZE = 50;
 
@@ -122,6 +123,14 @@ export function useCollectionBookmarks(
         }));
       }),
     []
+  );
+
+  useEffect(
+    () =>
+      subscribeBookmarkChanges(() => {
+        void load();
+      }),
+    [load]
   );
 
   const refresh = useCallback(async () => {

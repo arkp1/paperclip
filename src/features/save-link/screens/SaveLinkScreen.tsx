@@ -15,6 +15,7 @@ import {
   findBookmarkByUrl,
 } from "@/features/bookmarks/data/bookmarkRepository";
 import { enrichBookmarkPreview } from "@/features/bookmarks/services/previewService";
+import { emitBookmarkChanged } from "@/features/bookmarks/services/bookmarkEvents";
 import { cacheArticleInBackground } from "@/features/reader/services/articleService";
 import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import type { Bookmark, PreviewStatus } from "@/features/bookmarks/types";
@@ -25,6 +26,7 @@ import {
   type LinkMetadata,
 } from "@/features/save-link/services/metadataService";
 import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -45,7 +47,15 @@ import {
   useTheme,
 } from "@/theme";
 
-export function SaveLinkScreen() {
+export function SaveLinkScreen({
+  embedded = false,
+  onSaved,
+  onRequestClose,
+}: {
+  embedded?: boolean;
+  onSaved?: (folderId: string | null) => void;
+  onRequestClose?: () => void;
+} = {}) {
   const { theme } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -206,6 +216,12 @@ export function SaveLinkScreen() {
 
       void enrichBookmarkPreview(saved.id, metadata?.imageUrl ?? null);
       void cacheArticleInBackground(saved.id);
+      emitBookmarkChanged(saved.id);
+
+      if (onSaved) {
+        onSaved(folderId);
+        return;
+      }
 
       if (folderId) {
         router.replace({
@@ -223,28 +239,39 @@ export function SaveLinkScreen() {
     }
   };
 
+  const Container = embedded ? View : Screen;
+
   return (
-    <Screen>
-      <View style={styles.headerRow}>
-        <IconButton icon="close" label="Cancel" onPress={() => router.back()} />
-        <MaterialCommunityIcons
-          name="link-variant"
-          size={22}
-          color={theme.colors.onSurfaceVariant}
-        />
-        <AppText variant="headlineMedium" accessibilityRole="header" style={styles.title}>
-          Save a link
-        </AppText>
-      </View>
+    <Container style={embedded ? styles.flex : undefined}>
+      {!embedded ? (
+        <View style={styles.headerRow}>
+          <IconButton icon="close" label="Cancel" onPress={() => navigateBack(router)} />
+          <MaterialCommunityIcons
+            name="link-variant"
+            size={22}
+            color={theme.colors.onSurfaceVariant}
+          />
+          <AppText variant="headlineMedium" accessibilityRole="header" style={styles.title}>
+            Save a link
+          </AppText>
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          embedded
+            ? "height"
+            : Platform.OS === "ios"
+              ? "padding"
+              : undefined
+        }
       >
         <ScrollView
+          style={styles.flex}
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: insets.bottom + spacing[8] + audioInset },
+            { paddingBottom: insets.bottom + spacing[8] + (embedded ? 0 : audioInset) },
           ]}
           keyboardShouldPersistTaps="handled"
         >
@@ -474,6 +501,7 @@ export function SaveLinkScreen() {
                 }
                 const existing = duplicate;
                 setDuplicate(null);
+                onRequestClose?.();
                 void openBookmarkDestination(existing, router);
               }}
             />
@@ -489,7 +517,7 @@ export function SaveLinkScreen() {
           </>
         }
       />
-    </Screen>
+    </Container>
   );
 }
 

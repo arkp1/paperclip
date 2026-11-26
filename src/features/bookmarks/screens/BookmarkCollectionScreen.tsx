@@ -20,6 +20,7 @@ import type {
   BookmarkViewMode,
 } from "@/features/bookmarks/types";
 import { BOOKMARK_VIEW_MODES } from "@/features/bookmarks/types";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import { AnimatedLayoutChange } from "@/shared/ui/AnimatedLayoutChange";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -104,7 +105,7 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
       <TopAppBar
         title={total > 0 ? `${title} · ${total}` : title}
         icon={collectionIcon}
-        onBack={() => router.back()}
+        onBack={() => navigateBack(router)}
         actions={
           <IconButton
             icon="sort-variant"

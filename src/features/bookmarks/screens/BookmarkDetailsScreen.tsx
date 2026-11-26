@@ -10,6 +10,7 @@ import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkA
 import { useBookmarkDetails } from "@/features/bookmarks/hooks/useBookmarkDetails";
 import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -40,7 +41,7 @@ export function BookmarkDetailsScreen({
   useEffect(() => {
     if (isPrivate && !isUnlocked) {
       setActionsVisible(false);
-      router.back();
+      navigateBack(router);
     }
   }, [isPrivate, isUnlocked, router]);
 
@@ -54,7 +55,7 @@ export function BookmarkDetailsScreen({
       <TopAppBar
         title="Saved link"
         icon="link-variant"
-        onBack={() => router.back()}
+        onBack={() => navigateBack(router)}
         actions={
           bookmark && !privateLocked ? (
             <IconButton

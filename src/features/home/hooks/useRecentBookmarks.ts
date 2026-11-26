@@ -5,6 +5,7 @@ import { listPublicBookmarks } from "@/features/bookmarks/data/bookmarkRepositor
 import type { BookmarkView } from "@/features/bookmarks/types";
 import { RECENT_BOOKMARKS_LIMIT } from "@/features/home/constants";
 import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
+import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 type RecentBookmarksState = {
   bookmarks: BookmarkView[];
@@ -53,6 +54,14 @@ export function useRecentBookmarks() {
         }));
       }),
     []
+  );
+
+  useEffect(
+    () =>
+      subscribeBookmarkChanges(() => {
+        void load();
+      }),
+    [load]
   );
 
   const refresh = useCallback(async () => {

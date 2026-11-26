@@ -6,6 +6,19 @@ const PREVIEW_DIRECTORY_SEGMENTS = ["paperclip", "previews", "public"] as const;
 const PREVIEW_DIRECTORY_PATH = PREVIEW_DIRECTORY_SEGMENTS.join("/");
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_IMAGE_BYTES = 5_000_000;
+const RESOLVED_URI_CACHE_LIMIT = 256;
+const resolvedUriCache = new Map<string, string>();
+
+function rememberResolvedUri(path: string, uri: string): string {
+  if (resolvedUriCache.size >= RESOLVED_URI_CACHE_LIMIT) {
+    const oldest = resolvedUriCache.keys().next().value;
+    if (oldest) {
+      resolvedUriCache.delete(oldest);
+    }
+  }
+  resolvedUriCache.set(path, uri);
+  return uri;
+}
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -14,7 +27,57 @@ const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
   "image/avif": "avif",
+  "image/svg+xml": "svg",
 };
+
+function detectImageExtension(bytes: ArrayBuffer): string | null {
+  const view = new Uint8Array(bytes.slice(0, 16));
+  if (view.length >= 3 && view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff) {
+    return "jpg";
+  }
+  if (
+    view.length >= 8 &&
+    view[0] === 0x89 &&
+    view[1] === 0x50 &&
+    view[2] === 0x4e &&
+    view[3] === 0x47
+  ) {
+    return "png";
+  }
+  if (
+    view.length >= 6 &&
+    view[0] === 0x47 &&
+    view[1] === 0x49 &&
+    view[2] === 0x46
+  ) {
+    return "gif";
+  }
+  if (
+    view.length >= 12 &&
+    view[0] === 0x52 &&
+    view[1] === 0x49 &&
+    view[2] === 0x46 &&
+    view[3] === 0x46 &&
+    view[8] === 0x57 &&
+    view[9] === 0x45 &&
+    view[10] === 0x42 &&
+    view[11] === 0x50
+  ) {
+    return "webp";
+  }
+  if (
+    view.length >= 12 &&
+    view[4] === 0x66 &&
+    view[5] === 0x74 &&
+    view[6] === 0x79 &&
+    view[7] === 0x70 &&
+    ((view[8] === 0x61 && view[9] === 0x76 && view[10] === 0x69 && view[11] === 0x66) ||
+      (view[8] === 0x61 && view[9] === 0x76 && view[10] === 0x69 && view[11] === 0x73))
+  ) {
+    return "avif";
+  }
+  return null;
+}
 
 function getPreviewDirectory(): Directory {
   const directory = new Directory(Paths.document, ...PREVIEW_DIRECTORY_SEGMENTS);
@@ -26,12 +89,41 @@ function getPreviewDirectory(): Directory {
 
 /** Resolves a stored relative preview path to a displayable file URI. */
 export function resolvePreviewImageUri(relativePath: string): string | null {
-  if (relativePath.startsWith("data:")) {
-    return relativePath;
+  const path = relativePath.trim();
+  if (!path) {
+    return null;
   }
+  const cached = resolvedUriCache.get(path);
+  if (cached) {
+    return cached;
+  }
+  if (path.startsWith("data:")) {
+    return rememberResolvedUri(path, path);
+  }
+  if (isSafeRemoteHttpUrl(path)) {
+    return rememberResolvedUri(path, path);
+  }
+
   try {
-    const file = new File(Paths.document, relativePath);
-    return file.exists ? file.uri : null;
+    if (path.startsWith("file://") || path.startsWith("content://")) {
+      return rememberResolvedUri(path, path);
+    }
+    if (path.startsWith("/")) {
+      const absolute = new File(path);
+      return absolute.exists
+        ? rememberResolvedUri(path, absolute.uri)
+        : null;
+    }
+
+    const segments = path
+      .replace(/\\/g, "/")
+      .split("/")
+      .filter((segment) => segment.length > 0);
+    if (segments.length === 0) {
+      return null;
+    }
+    const file = new File(Paths.document, ...segments);
+    return file.exists ? rememberResolvedUri(path, file.uri) : null;
   } catch {
     return null;
   }
@@ -95,10 +187,6 @@ export async function downloadPreviewImage(
       .trim()
       .toLowerCase();
 
-    if (!contentType.startsWith("image/")) {
-      throw new Error("Preview asset is not an image.");
-    }
-
     const declaredSize = Number(response.headers.get("content-length") ?? "0");
     if (declaredSize > MAX_IMAGE_BYTES) {
       throw new Error("Preview image is too large.");
@@ -109,9 +197,16 @@ export async function downloadPreviewImage(
       throw new Error("Preview image is too large.");
     }
 
+    const extension =
+      EXTENSION_BY_CONTENT_TYPE[contentType] ?? detectImageExtension(bytes);
+
+    if (!contentType.startsWith("image/") && !extension) {
+      throw new Error("Preview asset is not an image.");
+    }
+
     return {
       bytes,
-      extension: EXTENSION_BY_CONTENT_TYPE[contentType] ?? "img",
+      extension: extension ?? "img",
     };
   } finally {
     clearTimeout(timeout);

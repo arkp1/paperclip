@@ -13,6 +13,7 @@ import {
   updateBookmarkPreviewAsset,
 } from "@/features/bookmarks/data/bookmarkRepository";
 import type { PreviewStatus } from "@/features/bookmarks/types";
+import { emitBookmarkChanged } from "@/features/bookmarks/services/bookmarkEvents";
 import { fetchLinkMetadata } from "@/features/save-link/services/metadataService";
 import {
   downloadPreviewImage,
@@ -57,6 +58,7 @@ export async function enrichBookmarkPreview(
         deletePreviewImage(previewImagePath);
         throw error;
       });
+      emitBookmarkChanged(bookmarkId);
     });
   } catch (error) {
     console.warn("Could not cache the preview image.", error);
@@ -146,6 +148,7 @@ export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> 
     ) {
       deletePreviewImage(current.previewImagePath);
     }
+    emitBookmarkChanged(bookmarkId);
   });
 }
 

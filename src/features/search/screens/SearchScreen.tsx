@@ -10,6 +10,7 @@ import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
 import { useSearchBookmarks } from "@/features/bookmarks/hooks/useSearchBookmarks";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import { AppText } from "@/shared/ui/AppText";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
@@ -46,7 +47,7 @@ export function SearchScreen() {
   return (
     <Screen>
       <View style={styles.headerRow}>
-        <IconButton icon="arrow-left" label="Go back" onPress={() => router.back()} />
+        <IconButton icon="arrow-left" label="Go back" onPress={() => navigateBack(router)} />
         <MaterialCommunityIcons
           name="magnify"
           size={22}

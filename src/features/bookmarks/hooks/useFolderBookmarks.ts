@@ -4,6 +4,7 @@ import { listBookmarksInFolder } from "@/features/bookmarks/data/bookmarkReposit
 import type { Bookmark, BookmarkSortMode } from "@/features/bookmarks/types";
 import { PrivateFolderLockedError } from "@/features/folders/errors";
 import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
+import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 type FolderBookmarksState = {
   bookmarks: Bookmark[];
@@ -53,6 +54,14 @@ export function useFolderBookmarks(folderId: string, sortMode: BookmarkSortMode)
         }));
       }),
     []
+  );
+
+  useEffect(
+    () =>
+      subscribeBookmarkChanges(() => {
+        void load();
+      }),
+    [load]
   );
 
   return { ...state, reload: load };

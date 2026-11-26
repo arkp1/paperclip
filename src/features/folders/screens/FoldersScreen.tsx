@@ -17,9 +17,7 @@ import type { FolderColorKey } from "@/theme";
 import { AppText } from "@/shared/ui/AppText";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { FloatingAddButton } from "@/shared/ui/FloatingAddButton";
 import { useFloatingNavigationInset } from "@/shared/ui/FloatingBottomNavigation";
-import { useCollapsingFab } from "@/shared/hooks/useCollapsingFab";
 import { IconButton } from "@/shared/ui/IconButton";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
@@ -32,7 +30,6 @@ export function FoldersScreen() {
   const { theme } = useTheme();
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
-  const { collapsed: fabCollapsed, onScroll: handleScroll } = useCollapsingFab();
 
   const {
     folders,
@@ -155,7 +152,6 @@ export function FoldersScreen() {
 
       <FlatList
         data={folders}
-        onScroll={handleScroll}
         scrollEventThrottle={16}
         keyExtractor={(folder) => folder.id}
         initialNumToRender={8}
@@ -252,11 +248,6 @@ export function FoldersScreen() {
             onMore={openFolderActions}
           />
         )}
-      />
-
-      <FloatingAddButton
-        collapsed={fabCollapsed}
-        onPress={() => router.push("/bookmarks/save")}
       />
 
       <FolderNameDialog

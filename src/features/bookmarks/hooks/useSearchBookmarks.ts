@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { searchPublicBookmarks } from "@/features/bookmarks/data/bookmarkRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
 import { subscribeReadingProgress } from "@/features/reader/services/readingProgressEvents";
+import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -73,6 +74,14 @@ export function useSearchBookmarks(query: string) {
         }));
       }),
     []
+  );
+
+  useEffect(
+    () =>
+      subscribeBookmarkChanges(() => {
+        reload();
+      }),
+    [reload]
   );
 
   return { ...state, reload };

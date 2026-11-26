@@ -173,6 +173,7 @@ function BookmarkPreview({ bookmark, style }: BookmarkPreviewProps) {
   if (uri) {
     return (
       <Image
+        key={uri}
         source={{ uri }}
         style={style}
         contentFit="cover"

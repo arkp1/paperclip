@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated as RNAnimated, View } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "expo-router/tabs";
 import Animated, {
+  Easing,
+  LinearTransition,
+  interpolateColor,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -31,9 +35,11 @@ const icons: Record<string, { active: IconName; inactive: IconName }> = {
   settings: { active: "cog", inactive: "cog-outline" },
 };
 
+const AnimatedIcon = Animated.createAnimatedComponent(MaterialCommunityIcons);
+
 type TabLayout = { x: number; width: number };
 
-function getBarBottomOffset(bottomInset: number): number {
+export function getBarBottomOffset(bottomInset: number): number {
   return Math.max(bottomInset, MIN_BOTTOM_INSET) + CAPSULE_BOTTOM_GAP;
 }
 
@@ -84,13 +90,19 @@ export function FloatingBottomNavigation({
       }
 
       if (reduceMotion) {
-        pillX.value = layout.x;
-        pillWidth.value = layout.width;
+        pillX.value = layout.x - 2;
+        pillWidth.value = layout.width + 4;
         return;
       }
 
-      pillX.value = withTiming(layout.x, { duration: 140 });
-      pillWidth.value = withTiming(layout.width, { duration: 140 });
+      pillX.value = withTiming(layout.x - 2, {
+        duration: 200,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+      });
+      pillWidth.value = withTiming(layout.width + 4, {
+        duration: 200,
+        easing: Easing.bezier(0.2, 0, 0, 1),
+      });
     },
     [pillWidth, pillX, reduceMotion]
   );
@@ -101,8 +113,8 @@ export function FloatingBottomNavigation({
     }
 
     if (!hasPositioned.current) {
-      pillX.value = selectedLayout.x;
-      pillWidth.value = selectedLayout.width;
+      pillX.value = selectedLayout.x - 2;
+      pillWidth.value = selectedLayout.width + 4;
       hasPositioned.current = true;
       return;
     }
@@ -259,52 +271,66 @@ function TabItem({
 }: TabItemProps) {
   const { theme } = useTheme();
   const { colors } = theme;
-  const selection = useRef(new RNAnimated.Value(isFocused ? 1 : 0)).current;
+  const progress = useSharedValue(isFocused ? 1 : 0);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    if (reduceMotion) {
-      selection.setValue(isFocused ? 1 : 0);
-      return;
-    }
+    progress.value = reduceMotion
+      ? isFocused
+        ? 1
+        : 0
+      : withTiming(isFocused ? 1 : 0, {
+          duration: 160,
+          easing: Easing.bezier(0.2, 0, 0, 1),
+        });
+  }, [isFocused, progress, reduceMotion]);
 
-    RNAnimated.timing(selection, {
-      toValue: isFocused ? 1 : 0,
-      duration: 130,
-      useNativeDriver: true,
-    }).start();
-  }, [isFocused, reduceMotion, selection]);
-
-  const iconScale = selection.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.08],
-  });
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + progress.value * 0.05 }],
+  }));
+  const iconProps = useAnimatedProps(() => ({
+    color: interpolateColor(
+      progress.value,
+      [0, 1],
+      [colors.onSurfaceVariant, colors.onPrimaryContainer]
+    ),
+  }));
 
   return (
-    <ScalePressable
-      accessibilityRole="tab"
-      accessibilityLabel={`${label} tab`}
-      accessibilityState={{ selected: isFocused }}
-      onPress={onPress}
-      scaleTo={0.96}
+    <Animated.View
+      layout={LinearTransition.duration(200).easing(
+        Easing.bezier(0.2, 0, 0, 1)
+      )}
       onLayout={(event) => onLayout(index, event.nativeEvent.layout)}
-      style={styles.item}
+      style={{ width: isFocused ? 104 : 54 }}
     >
-      <RNAnimated.View style={{ transform: [{ scale: iconScale }] }}>
-        <MaterialCommunityIcons
-          name={isFocused ? icon.active : icon.inactive}
-          size={22}
-          color={isFocused ? colors.onPrimaryContainer : colors.onSurfaceVariant}
-        />
-      </RNAnimated.View>
-
-      <AppText
-        variant="labelMedium"
-        color={isFocused ? colors.onPrimaryContainer : colors.onSurfaceVariant}
-        numberOfLines={1}
+      <ScalePressable
+        accessibilityRole="tab"
+        accessibilityLabel={`${label} tab`}
+        accessibilityState={{ selected: isFocused }}
+        onPress={onPress}
+        scaleTo={0.96}
+        style={styles.item}
       >
-        {label}
-      </AppText>
-    </ScalePressable>
+        <Animated.View style={iconStyle}>
+          <AnimatedIcon
+            name={isFocused ? icon.active : icon.inactive}
+            size={isFocused ? 23 : 22}
+            animatedProps={iconProps}
+          />
+        </Animated.View>
+
+        {isFocused ? (
+          <AppText
+            variant="labelMedium"
+            color={colors.onPrimaryContainer}
+            numberOfLines={1}
+            style={styles.itemLabelText}
+          >
+            {label}
+          </AppText>
+        ) : null}
+      </ScalePressable>
+    </Animated.View>
   );
 }

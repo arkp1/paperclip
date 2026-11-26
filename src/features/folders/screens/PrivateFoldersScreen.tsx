@@ -12,6 +12,7 @@ import { FolderActionsDialog } from "@/features/folders/components/FolderActions
 import { FolderCard } from "@/features/folders/components/FolderCard";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import {
   createPrivateFolder,
   deleteFolder,
@@ -75,7 +76,7 @@ export function PrivateFoldersScreen() {
         if (result.message !== "Unlock cancelled.") {
           Alert.alert("Private folders", result.message);
         }
-        router.back();
+        navigateBack(router);
         return;
       }
       setAuthorized(true);
@@ -85,7 +86,7 @@ export function PrivateFoldersScreen() {
 
   useEffect(() => {
     if (authorized && !isPrivateSpaceUnlocked()) {
-      router.back();
+      navigateBack(router);
     }
   }, [authorized, isUnlocked, router]);
 
@@ -140,7 +141,7 @@ export function PrivateFoldersScreen() {
       <TopAppBar
         title="Private"
         icon="lock-outline"
-        onBack={() => router.back()}
+        onBack={() => navigateBack(router)}
         actions={
           <IconButton
             icon="plus"

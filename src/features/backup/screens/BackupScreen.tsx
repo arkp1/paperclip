@@ -11,6 +11,7 @@ import {
   type PickedBackup,
 } from "@/features/backup/services/backupService";
 import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -90,7 +91,7 @@ export function BackupScreen() {
       <TopAppBar
         title="Import & export"
         icon="database-outline"
-        onBack={() => router.back()}
+        onBack={() => navigateBack(router)}
       />
 
       <ScrollView

@@ -14,10 +14,10 @@ Runtime screenshots from the Android development build, in app order:
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/home.jpg" width="220" alt="Home screen with search, recent folders, and recently saved links" /></td>
+    <td><img src="docs/screenshots/home.jpg" width="220" alt="Home screen with search, Worth a look carousel, and recent folders" /></td>
     <td><img src="docs/screenshots/folders.jpg" width="220" alt="Folders screen with collections and user folders" /></td>
     <td><img src="docs/screenshots/reader.jpg" width="220" alt="Distraction-free reader with serif typography" /></td>
-    <td><img src="docs/screenshots/settings.jpg" width="220" alt="Settings screen with appearance and privacy controls" /></td>
+    <td><img src="docs/screenshots/settings.jpg" width="220" alt="Settings screen with appearance, accent, and privacy controls" /></td>
   </tr>
   <tr>
     <td align="center"><sub>Home</sub></td>
@@ -31,8 +31,10 @@ Runtime screenshots from the Android development build, in app order:
 
 ### Library and organization
 - Three primary destinations: **Home**, **Folders**, and **Settings**.
-- Home shows a search entry, recent folders, and a four-item Recently saved
-  preview.
+- Home shows a search entry, a full-width **Worth a look** article carousel,
+  recent folders, and a four-item Recently saved preview.
+- The Worth a look carousel supports continuous swipe deformation, animated
+  pagination, reduced motion, and cached preview loading.
 - Folders is the full library: All bookmarks, Favourites, Uncategorized, and
   user-created folders.
 - Grid, list, and card bookmark layouts with persisted sort order.
@@ -43,14 +45,16 @@ Runtime screenshots from the Android development build, in app order:
   a visible actions menu, TalkBack custom actions, and a thin reading-progress
   indicator.
 - Folder colours, rename, safe deletion options, and recents ordering.
-- Home, collection, folder, and search cards update reading progress
-  immediately after the reader saves it.
+- Home, collection, folder, and search cards update reading progress and preview
+  assets immediately when they change.
+- Safe back handling for back arrows, Android back, and deep-linked screens.
 
 ### Capture and previews
 - Android Sharesheet integration with **Save** and **Quick save** actions.
 - Manual URL save flow with validation, optional notes, folder selection,
   duplicate hints and an Open existing action, clipboard paste assistance, and
-  non-blocking preview enrichment.
+  non-blocking preview enrichment. The floating plus opens an expandable save
+  sheet that stays on the current screen after saving.
 - YouTube oEmbed and Reddit social-card metadata fallbacks for sites that block
   generic metadata requests.
 - Preview images cached in app-managed storage and refreshed with bounded retry
@@ -78,11 +82,15 @@ Runtime screenshots from the Android development build, in app order:
 
 ### Appearance and interaction
 - Paperclip light and dark themes, five accent palettes, and AMOLED black.
+- Shared animated segmented controls for theme and reader/browser preference,
+  with a sliding selection surface and immediate visual feedback.
 - Android 12+ dynamic colour for native Material controls when enabled.
 - Google Sans Flex typography for the app, with bundled Noto Serif and
   JetBrains Mono families for the reader.
 - Material 3 Expressive-inspired controls, shapes, and Reanimated interaction
   feedback.
+- Compact floating navigation with a horizontal icon-and-label active pill and
+  a separate save action.
 - Reinforced light, dark, and AMOLED outline and surface contrast tokens.
 - 48dp navigation targets, accessible heading roles, and progress values for
   TalkBack.

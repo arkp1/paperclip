@@ -1,5 +1,6 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -108,14 +109,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setMode = useCallback((nextMode: ThemeMode) => {
-    setModeState(nextMode);
+    startTransition(() => {
+      setModeState(nextMode);
+    });
     void setSetting(THEME_MODE_SETTING_KEY, nextMode).catch(() => {
       console.warn("Could not persist the appearance preference.");
     });
   }, []);
 
   const setAccent = useCallback((nextAccent: AccentKey) => {
-    setAccentState(nextAccent);
+    startTransition(() => {
+      setAccentState(nextAccent);
+    });
     void setSetting(ACCENT_SETTING_KEY, nextAccent).catch(() => {
       console.warn("Could not persist the accent preference.");
     });
@@ -145,14 +150,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const value = useMemo<ThemeContextValue>(() => {
-    const scheme = resolveScheme(
-      mode,
-      systemScheme === "dark" ? "dark" : systemScheme === "light" ? "light" : null
-    );
-    return {
-      theme: createTheme(scheme, accent, amoled),
-      isDark: scheme === "dark",
+  const scheme = resolveScheme(
+    mode,
+    systemScheme === "dark" ? "dark" : systemScheme === "light" ? "light" : null
+  );
+  const theme = useMemo(
+    () => createTheme(scheme, accent, amoled),
+    [accent, amoled, scheme]
+  );
+  const isDark = scheme === "dark";
+
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      theme,
+      isDark,
       mode,
       accent,
       amoled,
@@ -163,20 +174,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setAmoled,
       setDynamic,
       setFolderTonal,
-    };
-  }, [
-    accent,
-    amoled,
-    dynamic,
-    folderTonal,
-    mode,
-    setAccent,
-    setAmoled,
-    setDynamic,
-    setFolderTonal,
-    setMode,
-    systemScheme,
-  ]);
+    }),
+    [
+      accent,
+      amoled,
+      dynamic,
+      folderTonal,
+      isDark,
+      mode,
+      setAccent,
+      setAmoled,
+      setDynamic,
+      setFolderTonal,
+      setMode,
+      theme,
+    ]
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

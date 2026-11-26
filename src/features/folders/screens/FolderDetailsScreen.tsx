@@ -21,6 +21,7 @@ import { DeleteFolderDialog } from "@/features/folders/components/DeleteFolderDi
 import { FolderActionsDialog } from "@/features/folders/components/FolderActionsDialog";
 import { FolderNameDialog } from "@/features/folders/components/FolderNameDialog";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
+import { navigateBack } from "@/shared/navigation/navigateBack";
 import {
   deleteFolder,
   renameFolder,
@@ -83,7 +84,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       setActionsVisible(false);
       setRenameVisible(false);
       setDeleteVisible(false);
-      router.back();
+      navigateBack(router);
     }
   }, [folder?.isPrivate, isUnlocked, router]);
 
@@ -113,7 +114,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
           return;
         }
         await setFolderPrivate(folder.id, true);
-        router.back();
+        navigateBack(router);
       }
     } catch {
       Alert.alert("Private folders", "Could not update this folder.");
@@ -171,7 +172,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
     }
 
     await deleteFolder(folder.id, strategy);
-    router.back();
+    navigateBack(router);
   };
 
   return (
@@ -179,7 +180,7 @@ export function FolderDetailsScreen({ folderId }: FolderDetailsScreenProps) {
       <TopAppBar
         title={folder?.name ?? "Folder"}
         icon="folder-outline"
-        onBack={() => router.back()}
+        onBack={() => navigateBack(router)}
         actions={
           folder &&
           status === "ready" &&

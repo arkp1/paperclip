@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { getBookmarkPrivacy } from "@/core/database/privateVaultRepository";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { getFolderById } from "@/features/folders/data/folderRepository";
 import type { BookmarkView } from "@/features/bookmarks/types";
+import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 type BookmarkDetailsState = {
   bookmark: BookmarkView | null;
@@ -87,6 +88,16 @@ export function useBookmarkDetails(bookmarkId: string) {
   );
 
   const reload = useCallback(() => load(), [load]);
+
+  useEffect(
+    () =>
+      subscribeBookmarkChanges((changedIds) => {
+        if (changedIds.has(bookmarkId)) {
+          void load();
+        }
+      }),
+    [bookmarkId, load]
+  );
 
   return {
     ...state,

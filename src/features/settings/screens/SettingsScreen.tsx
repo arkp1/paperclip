@@ -4,12 +4,6 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Platform, ScrollView, View } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -18,6 +12,7 @@ import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
 import { MaterialHost } from "@/shared/ui/MaterialHost";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { Screen } from "@/shared/ui/Screen";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { styles } from "@/styles/features/settings/SettingsScreen.styles";
 import { accentOptions, accentSwatch, useTheme } from "@/theme";
@@ -31,6 +26,17 @@ const THEME_OPTIONS: { label: string; mode: ThemeMode }[] = [
   { label: "System", mode: "system" },
   { label: "Light", mode: "light" },
   { label: "Dark", mode: "dark" },
+];
+
+const THEME_SEGMENT_OPTIONS = THEME_OPTIONS.map((option) => ({
+  value: option.mode,
+  label: option.label,
+  accessibilityLabel: `${option.label} theme`,
+}));
+
+const OPEN_LINK_OPTIONS = [
+  { value: "reader" as const, label: "Reader", accessibilityLabel: "Open in reader" },
+  { value: "browser" as const, label: "Browser", accessibilityLabel: "Open in browser" },
 ];
 
 export function SettingsScreen() {
@@ -50,13 +56,7 @@ export function SettingsScreen() {
   const router = useRouter();
   const bottomInset = useFloatingNavigationInset();
   const version = Constants.expoConfig?.version ?? "1.0.0";
-  const [segmentWidth, setSegmentWidth] = useState(0);
   const [openLinks, setOpenLinks] = useState<"reader" | "browser">("reader");
-  const selectedIndex = Math.max(
-    0,
-    THEME_OPTIONS.findIndex((option) => option.mode === mode),
-  );
-  const selection = useSharedValue(selectedIndex);
 
   useEffect(() => {
     void getSetting("reader_open_links")
@@ -65,17 +65,6 @@ export function SettingsScreen() {
       })
       .catch(() => setOpenLinks("reader"));
   }, []);
-
-  useEffect(() => {
-    selection.value = withTiming(selectedIndex, {
-      duration: 220,
-      easing: Easing.bezier(0.2, 0, 0, 1),
-    });
-  }, [selectedIndex, selection]);
-
-  const selectionStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: selection.value * (segmentWidth + 2) }],
-  }));
 
   return (
     <Screen>
@@ -112,59 +101,11 @@ export function SettingsScreen() {
               </AppText>
             </View>
 
-            <View
-              style={[
-                styles.segmented,
-                {
-                  backgroundColor: theme.colors.surfaceContainer,
-                  borderColor: theme.colors.outlineVariant,
-                },
-              ]}
-              onLayout={(event) => {
-                const available = event.nativeEvent.layout.width - 6 - 4;
-                setSegmentWidth(Math.max(0, available / 3));
-              }}
-            >
-              {segmentWidth > 0 ? (
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.segmentPill,
-                    {
-                      width: segmentWidth,
-                      backgroundColor: theme.colors.primaryContainer,
-                    },
-                    selectionStyle,
-                  ]}
-                />
-              ) : null}
-              {THEME_OPTIONS.map((option) => {
-                const selected = option.mode === mode;
-                return (
-                  <ScalePressable
-                    key={option.mode}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`${option.label} theme`}
-                    accessibilityState={{ checked: selected }}
-                    onPress={() => setMode(option.mode)}
-                    pressFeedback="scale"
-                    scaleTo={0.97}
-                    style={styles.segment}
-                  >
-                    <AppText
-                      variant="labelLarge"
-                      color={
-                        selected
-                          ? theme.colors.onPrimaryContainer
-                          : theme.colors.onSurfaceVariant
-                      }
-                    >
-                      {option.label}
-                    </AppText>
-                  </ScalePressable>
-                );
-              })}
-            </View>
+            <SegmentedControl
+              options={THEME_SEGMENT_OPTIONS}
+              value={mode}
+              onChange={setMode}
+            />
           </View>
 
           <View
@@ -327,53 +268,17 @@ export function SettingsScreen() {
               </AppText>
             </View>
 
-            <View
-              style={[
-                styles.segmented,
-                {
-                  backgroundColor: theme.colors.surfaceContainer,
-                  borderColor: theme.colors.outlineVariant,
-                },
-              ]}
-            >
-              {(["reader", "browser"] as const).map((option) => {
-                const selected = openLinks === option;
-                return (
-                  <ScalePressable
-                    key={option}
-                    accessibilityRole="radio"
-                    accessibilityLabel={
-                      option === "reader" ? "Open in reader" : "Open in browser"
-                    }
-                    accessibilityState={{ checked: selected }}
-                    onPress={() => {
-                      setOpenLinks(option);
-                      void setSetting("reader_open_links", option).catch(
-                        () => undefined
-                      );
-                    }}
-                    scaleTo={0.97}
-                    style={[
-                      styles.segment,
-                      selected
-                        ? { backgroundColor: theme.colors.primaryContainer }
-                        : null,
-                    ]}
-                  >
-                    <AppText
-                      variant="labelLarge"
-                      color={
-                        selected
-                          ? theme.colors.onPrimaryContainer
-                          : theme.colors.onSurfaceVariant
-                      }
-                    >
-                      {option === "reader" ? "Reader" : "Browser"}
-                    </AppText>
-                  </ScalePressable>
-                );
-              })}
-            </View>
+            <SegmentedControl
+              options={OPEN_LINK_OPTIONS}
+              value={openLinks}
+              onChange={(option) => {
+                const previous = openLinks;
+                setOpenLinks(option);
+                void setSetting("reader_open_links", option).catch(() => {
+                  setOpenLinks(previous);
+                });
+              }}
+            />
           </View>
         </View>
 
