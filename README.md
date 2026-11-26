@@ -14,10 +14,10 @@ Runtime screenshots from the Android development build, in app order:
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/home.jpg" width="220" alt="Home screen with search, Worth a look carousel, and recent folders" /></td>
-    <td><img src="docs/screenshots/folders.jpg" width="220" alt="Folders screen with collections and user folders" /></td>
+    <td><img src="docs/screenshots/home-v2.jpg" width="220" alt="Home screen with search, Worth a look carousel, and recent folders" /></td>
+    <td><img src="docs/screenshots/folders-v2.jpg" width="220" alt="Folders screen with collections and user folders" /></td>
     <td><img src="docs/screenshots/reader.jpg" width="220" alt="Distraction-free reader with serif typography" /></td>
-    <td><img src="docs/screenshots/settings.jpg" width="220" alt="Settings screen with appearance, accent, and privacy controls" /></td>
+    <td><img src="docs/screenshots/settings-v2.jpg" width="220" alt="Settings screen with appearance, accent, and privacy controls" /></td>
   </tr>
   <tr>
     <td align="center"><sub>Home</sub></td>
