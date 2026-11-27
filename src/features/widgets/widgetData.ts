@@ -1,8 +1,4 @@
 import { File } from "expo-file-system";
-import {
-  manipulateAsync,
-  SaveFormat,
-} from "expo-image-manipulator";
 
 import { getDatabase } from "@/core/database/database";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
@@ -61,6 +57,9 @@ async function readThumbnail(
     if (!uri) {
       return undefined;
     }
+    const { manipulateAsync, SaveFormat } = await import(
+      "expo-image-manipulator"
+    );
     const thumbnail = await manipulateAsync(uri, [{ resize: { width: 96 } }], {
       compress: 0.55,
       format: SaveFormat.JPEG,
