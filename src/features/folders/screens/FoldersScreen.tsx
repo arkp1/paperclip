@@ -92,6 +92,8 @@ export function FoldersScreen() {
       return;
     }
     await remove(deleteTarget.id, strategy);
+    haptics.success();
+    ToastAndroid.show("Folder deleted", ToastAndroid.SHORT);
   };
 
   const handleMakePrivate = async (folder: Folder) => {

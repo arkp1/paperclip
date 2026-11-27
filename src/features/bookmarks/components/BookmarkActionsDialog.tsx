@@ -175,9 +175,12 @@ export function BookmarkActionsDialog({
 
     try {
       await deleteBookmarkWithAssets(bookmark.id);
+      haptics.success();
+      ToastAndroid.show("Link deleted", ToastAndroid.SHORT);
       onChanged();
       closeAll();
     } catch {
+      haptics.error();
       setError("Could not delete this link.");
     } finally {
       setSaving(false);
