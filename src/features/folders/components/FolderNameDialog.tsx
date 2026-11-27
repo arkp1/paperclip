@@ -8,6 +8,7 @@ import { Button } from "@/shared/ui/Button";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { TextField } from "@/shared/ui/TextField";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
+import { haptics } from "@/shared/utils/haptics";
 import { styles } from "@/styles/features/folders/FolderNameDialog.styles";
 import {
   defaultFolderColorKey,
@@ -145,7 +146,10 @@ export function FolderNameDialog({
                   accessibilityRole="radio"
                   accessibilityLabel={`${key} folder color`}
                   accessibilityState={{ checked: selected }}
-                  onPress={() => setColorKey(key)}
+                  onPress={() => {
+                    haptics.selection();
+                    setColorKey(key);
+                  }}
                   scaleTo={0.9}
                   style={[
                     styles.swatch,

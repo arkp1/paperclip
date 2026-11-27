@@ -18,6 +18,7 @@ import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider
 import { AppText } from "@/shared/ui/AppText";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
+import { haptics } from "@/shared/utils/haptics";
 import { MaterialCommunityIcons, type IconName } from "@/shared/ui/icons";
 import {
   CAPSULE_HEIGHT,
@@ -233,6 +234,7 @@ export function FloatingBottomNavigation({
               isFocused={isFocused}
               onLayout={handleItemLayout}
               onPress={() => {
+                haptics.selection();
                 const event = emitter.emit({
                   type: "tabPress",
                   target: route.key,

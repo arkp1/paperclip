@@ -13,6 +13,7 @@ import {
   refreshBookmarkPreview,
 } from "@/features/bookmarks/services/previewService";
 import type { Bookmark, BookmarkView } from "@/features/bookmarks/types";
+import { haptics } from "@/shared/utils/haptics";
 import { getAllFolders } from "@/features/folders/data/folderRepository";
 import { FolderPickerContent } from "@/features/folders/components/FolderPickerDialog";
 import type { Folder } from "@/features/folders/types";
@@ -123,6 +124,7 @@ export function BookmarkActionsDialog({
   const copyLink = async () => {
     try {
       await Clipboard.setStringAsync(bookmark.originalUrl);
+      haptics.light();
       closeAll();
       if (Platform.OS === "android" && Number(Platform.Version) < 33) {
         ToastAndroid.show("Link copied", ToastAndroid.SHORT);
@@ -159,6 +161,7 @@ export function BookmarkActionsDialog({
   const toggleFavorite = async () => {
     try {
       await setBookmarkFavorite(bookmark.id, !bookmark.isFavorite);
+      haptics.selection();
       onChanged();
       closeAll();
     } catch {

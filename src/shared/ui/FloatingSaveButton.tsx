@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getBarBottomOffset } from "@/shared/ui/FloatingBottomNavigation";
 import { ScalePressable } from "@/shared/ui/ScalePressable";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
+import { haptics } from "@/shared/utils/haptics";
 import { spacing, useTheme } from "@/theme";
 
 type FloatingSaveButtonProps = {
@@ -22,7 +23,10 @@ export function FloatingSaveButton({ onPress }: FloatingSaveButtonProps) {
     <ScalePressable
       accessibilityRole="button"
       accessibilityLabel="Save a link"
-      onPress={onPress}
+      onPress={() => {
+        haptics.light();
+        onPress();
+      }}
       scaleTo={0.94}
       inkColor={theme.colors.onPrimary}
       style={[

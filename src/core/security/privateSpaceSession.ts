@@ -15,6 +15,7 @@ import {
   recoverPendingTransfers,
 } from "@/core/database/vaultTransfers";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
+import { haptics } from "@/shared/utils/haptics";
 
 let privateSpaceUnlocked = false;
 let unlockGeneration = 0;
@@ -232,6 +233,7 @@ export async function unlockPrivateSpace(): Promise<UnlockPrivateSpaceResult> {
   privateSpaceUnlocked = true;
   setPrivateVaultVisible(true);
   emit();
+  haptics.success();
   return { success: true };
 }
 
