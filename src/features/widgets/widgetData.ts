@@ -1,4 +1,8 @@
 import { File } from "expo-file-system";
+import {
+  manipulateAsync,
+  SaveFormat,
+} from "expo-image-manipulator";
 
 import { getDatabase } from "@/core/database/database";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
@@ -57,13 +61,15 @@ async function readThumbnail(
     if (!uri) {
       return undefined;
     }
-    const file = new File(uri);
+    const thumbnail = await manipulateAsync(uri, [{ resize: { width: 96 } }], {
+      compress: 0.55,
+      format: SaveFormat.JPEG,
+    });
+    const file = new File(thumbnail.uri);
     if (!file.exists || file.size > MAX_WIDGET_THUMBNAIL_BYTES) {
       return undefined;
     }
-    const extension = uri.split(".").pop()?.toLowerCase();
-    const mime = extension === "png" ? "image/png" : "image/jpeg";
-    return `data:${mime};base64,${await file.base64()}` as const;
+    return `data:image/jpeg;base64,${await file.base64()}` as const;
   } catch {
     return undefined;
   }
