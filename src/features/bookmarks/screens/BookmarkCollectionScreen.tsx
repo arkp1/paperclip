@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +53,16 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
   const { viewMode, setViewMode } = useBookmarkViewMode();
   const [viewDirection, setViewDirection] = useState<1 | -1>(1);
   const [refreshing, setRefreshing] = useState(false);
+  const rows = useMemo(() => {
+    if (viewMode !== "grid") {
+      return bookmarks.map((bookmark) => [bookmark]);
+    }
+    const next: BookmarkView[][] = [];
+    for (let index = 0; index < bookmarks.length; index += 2) {
+      next.push(bookmarks.slice(index, index + 2));
+    }
+    return next;
+  }, [bookmarks, viewMode]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -130,11 +140,8 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
         direction={viewDirection}
       >
       <FlatList
-        key={viewMode}
-        data={bookmarks}
-        keyExtractor={(bookmark) => bookmark.id}
-        numColumns={viewMode === "grid" ? 2 : 1}
-        columnWrapperStyle={viewMode === "grid" ? styles.column : undefined}
+        data={rows}
+        keyExtractor={(row) => row[0]?.id ?? "empty-row"}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
@@ -180,19 +187,23 @@ export function BookmarkCollectionScreen({ collection, title }: BookmarkCollecti
             />
           )
         }
-        renderItem={({ item }) =>
+        renderItem={({ item: row }) =>
           viewMode === "grid" ? (
-            <View style={styles.gridItem}>
-              <BookmarkCard
-                bookmark={item}
-                variant="grid"
-                onPress={openBookmark}
-                onLongPress={setSelectedBookmark}
-              />
+            <View style={[styles.column, styles.gridRow]}>
+              {row.map((bookmark) => (
+                <View key={bookmark.id} style={styles.gridItem}>
+                  <BookmarkCard
+                    bookmark={bookmark}
+                    variant="grid"
+                    onPress={openBookmark}
+                    onLongPress={setSelectedBookmark}
+                  />
+                </View>
+              ))}
             </View>
           ) : (
             <BookmarkCard
-              bookmark={item}
+              bookmark={row[0]}
               variant={viewMode === "cards" ? "cards" : "list"}
               onPress={openBookmark}
               onLongPress={setSelectedBookmark}

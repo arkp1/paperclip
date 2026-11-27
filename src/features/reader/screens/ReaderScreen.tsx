@@ -295,7 +295,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             keyedBlocks,
             preferences.fontSize,
             Math.max(220, contentWidth),
-            height,
+            pageHeight,
             preferences.lineHeight,
             preferences.paragraphSpacing,
             charWidthFactor
@@ -309,6 +309,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       preferences.font,
       preferences.paragraphSpacing,
       height,
+      pageHeight,
       preferences.paginate,
     ]
   );
@@ -1519,7 +1520,7 @@ function ArticleImageBlock({
         <Image
           source={{ uri: block.src }}
           style={[styles.image, paginated && styles.pageImage]}
-          contentFit="cover"
+          contentFit="contain"
           cachePolicy="memory"
           transition={150}
           accessibilityLabel={block.alt}

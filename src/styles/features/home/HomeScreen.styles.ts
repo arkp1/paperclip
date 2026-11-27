@@ -66,7 +66,7 @@ export const styles = StyleSheet.create({
     gap: spacing[3],
     paddingHorizontal: spacing[4],
     borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   overviewSection: {
     gap: spacing[3],

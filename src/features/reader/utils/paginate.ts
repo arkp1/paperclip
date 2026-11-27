@@ -37,6 +37,7 @@ export function paginate(
   const pages: ReaderPage[] = [];
   let current: ArticleBlock[] = [];
   let used = 220;
+  const imageBlockCost = 260;
 
   for (const originalBlock of blocks) {
     const blocksForPage =
@@ -47,7 +48,7 @@ export function paginate(
     for (const block of blocksForPage) {
       const size =
         block.type === "image"
-          ? 0
+          ? imageBlockCost
           : block.text.length + (block.type === "heading" ? 100 : 0);
       if (current.length > 0 && used + size > viewportBudget) {
         pages.push({ key: `page-${pages.length}`, blocks: current });
@@ -63,38 +64,9 @@ export function paginate(
     pages.push({ key: `page-${pages.length}`, blocks: current });
   }
 
-  if (pages.length > 0) {
-    const merged: ReaderPage[] = [];
-    for (let index = 0; index < pages.length; index += 1) {
-      const page = pages[index];
-      const imageOnly =
-        page.blocks.length > 0 &&
-        page.blocks.every((block) => block.type === "image");
-      if (!imageOnly) {
-        merged.push(page);
-        continue;
-      }
-
-      const next = pages[index + 1];
-      if (next) {
-        next.blocks = [...page.blocks, ...next.blocks];
-        continue;
-      }
-
-      if (merged.length > 0) {
-        merged[merged.length - 1].blocks.push(...page.blocks);
-      } else {
-        merged.push(page);
-      }
-    }
-
-    return merged.map((page, index) => ({
-      ...page,
-      key: `page-${index}`,
-    }));
-  }
-
-  return [{ key: "page-0", blocks: [] }];
+  return pages.length > 0
+    ? pages.map((page, index) => ({ ...page, key: `page-${index}` }))
+    : [{ key: "page-0", blocks: [] }];
 }
 
 export function splitLongTextBlock(

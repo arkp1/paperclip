@@ -11,6 +11,9 @@ export const styles = StyleSheet.create({
   column: {
     gap: spacing[3],
   },
+  gridRow: {
+    flexDirection: "row",
+  },
   gridItem: {
     flex: 1,
     maxWidth: "48.5%",

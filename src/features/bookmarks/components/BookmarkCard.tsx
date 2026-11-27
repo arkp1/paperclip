@@ -125,7 +125,7 @@ function BookmarkCardComponent({
             style={[
               styles.progressFill,
               {
-                width: `${Math.round(readingProgress * 100)}%`,
+                width: `${Math.min(100, Math.max(2, readingProgress * 100))}%`,
                 backgroundColor: theme.colors.primary,
               },
             ]}
