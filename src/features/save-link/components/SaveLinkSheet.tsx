@@ -12,6 +12,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +28,6 @@ type SaveLinkSheetProps = {
 };
 
 const SHEET_EASING = Easing.bezier(0.2, 0, 0, 1);
-const OPEN_MS = 280;
 const CLOSE_MS = 220;
 const SNAP_MS = 240;
 
@@ -62,18 +62,25 @@ export function SaveLinkSheet({
       }
       return;
     }
-    sheetHeight.value = withTiming(
-      value,
-      {
-        duration: close ? CLOSE_MS : OPEN_MS,
-        easing: SHEET_EASING,
-      },
-      (finished) => {
-        if (close && finished && !visibleRef.current) {
-          runOnJS(setMounted)(false);
-        }
-      }
-    );
+    sheetHeight.value = close
+      ? withTiming(
+          value,
+          {
+            duration: CLOSE_MS,
+            easing: SHEET_EASING,
+          },
+          (finished) => {
+            if (finished && !visibleRef.current) {
+              runOnJS(setMounted)(false);
+            }
+          }
+        )
+      : withSpring(value, {
+          damping: 26,
+          stiffness: 280,
+          mass: 0.9,
+          overshootClamping: true,
+        });
   };
 
   useEffect(() => {

@@ -75,19 +75,17 @@ export const styles = StyleSheet.create({
   },
   progressTrack: {
     position: "absolute",
-    left: 8,
-    right: 8,
-    bottom: 2,
+    left: 0,
+    right: 0,
+    bottom: 0,
     height: 3,
-    borderRadius: 2,
     backgroundColor: "rgba(120, 112, 130, 0.18)",
     overflow: "hidden",
     zIndex: 4,
   },
   progressFill: {
     height: "100%",
-    minWidth: 3,
-    borderRadius: 2,
+    minWidth: 4,
   },
   fallback: {
     flex: 1,

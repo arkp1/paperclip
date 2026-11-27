@@ -11,6 +11,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -56,9 +57,11 @@ export function AppDialog({
         return;
       }
       progress.value = 0;
-      progress.value = withTiming(1, {
-        duration: motion.settingsIn,
-        easing: Easing.bezier(0.2, 0, 0, 1),
+      progress.value = withSpring(1, {
+        damping: 25,
+        stiffness: 300,
+        mass: 0.9,
+        overshootClamping: true,
       });
       return;
     }
@@ -86,15 +89,18 @@ export function AppDialog({
   }, [progress, reduceMotion, visible]);
 
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
+    opacity: Math.min(1, progress.value),
   }));
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [
-      { translateY: (1 - progress.value) * 12 },
-      { scale: 0.94 + progress.value * 0.06 },
-    ],
-  }));
+  const cardStyle = useAnimatedStyle(() => {
+    const value = Math.min(1, progress.value);
+    return {
+      opacity: value,
+      transform: [
+        { translateY: (1 - value) * 16 },
+        { scale: 0.93 + value * 0.07 },
+      ],
+    };
+  });
 
   return (
     <Modal
