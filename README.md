@@ -179,7 +179,8 @@ and the floating navigation remain React Native. See
 [ADR 0001](docs/decisions/0001-native-material3-component-layer.md).
 
 The product contract and implementation decisions live in [`AGENTS.md`](AGENTS.md)
-and [`docs/`](docs/).
+and [`docs/`](docs/). Motion and haptic conventions are documented in
+[`docs/MOTION.md`](docs/MOTION.md).
 
 ## Known limitations
 
