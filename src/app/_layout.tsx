@@ -17,7 +17,10 @@ import { ReaderAudioHost } from "@/features/reader/audio/ReaderAudioHost";
 import { ReaderAudioProvider } from "@/features/reader/audio/ReaderAudioProvider";
 import { DatabaseGate } from "@/shared/ui/DatabaseGate";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
+import { installSafeConsole } from "@/shared/utils/safeLog";
 import { ThemeProvider, useTheme } from "@/theme";
+
+installSafeConsole();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({

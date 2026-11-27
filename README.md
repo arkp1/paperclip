@@ -150,13 +150,17 @@ back.
 ## Checks
 
 ```bash
-npx tsc --noEmit
-npm run test:vault
+npm run typecheck
+npm test
 ```
 
-The Android bundle is compiled by Metro. The vault regression suite uses Node's
-built-in SQLite support to verify transfer ownership, restart, reset, and newer
-destination-edit behavior. It does not replace on-device SQLCipher testing.
+The Android bundle is compiled by Metro. The Node suites cover private-vault
+regressions, URL/redirect safety, response bounds, folder validation, reader
+pagination, and bounded concurrency. They do not replace on-device SQLCipher
+testing.
+
+Backup and import behavior is documented in
+[`docs/BACKUP_FORMAT.md`](docs/BACKUP_FORMAT.md).
 
 ## Architecture
 
