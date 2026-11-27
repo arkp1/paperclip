@@ -1,4 +1,7 @@
 import { validateHttpUrl } from "@/shared/utils/url";
+import { isSafeRemoteHttpUrl } from "@/shared/utils/safeRemoteUrl";
+import { fetchSafeRemote } from "@/shared/utils/safeFetch";
+import { readBoundedText } from "@/shared/utils/boundedResponse";
 
 export type LinkMetadata = {
   title: string | null;
@@ -19,7 +22,9 @@ const REQUEST_TIMEOUT_MS = 8_000;
 const YOUTUBE_TIMEOUT_MS = 6_000;
 const REDDIT_TIMEOUT_MS = 6_000;
 const MAX_HTML_CHARACTERS = 512_000;
+const MAX_HTML_BYTES = 1_500_000;
 const MAX_OEMBED_CHARACTERS = 64_000;
+const MAX_OEMBED_BYTES = 256_000;
 const MAX_REDDIT_CHARACTERS = 512_000;
 const MAX_TITLE_LENGTH = 300;
 const MAX_DESCRIPTION_LENGTH = 500;
@@ -34,16 +39,9 @@ const YOUTUBE_HOSTS = new Set([
 
 const REDDIT_PREVIEW_USER_AGENT = "Twitterbot/1.0";
 
-const PRIVATE_HOST_PATTERN =
-  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i;
-
 /**
  * Bounded metadata retrieval used only from the Save Link screen. It never
- * runs page JavaScript and rejects private/loopback destinations.
- *
- * NOTE: React Native's fetch follows redirects internally, so redirect
- * destinations are not re-validated here. This is a known limitation to address
- * with a native safe-fetch bridge before share-intent capture ships.
+ * runs page JavaScript. Every redirect is validated before it is followed.
  */
 export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
   const validation = validateHttpUrl(rawUrl);
@@ -51,10 +49,10 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
     throw new MetadataUnavailableError(validation.message);
   }
 
-  const target = new URL(validation.url);
-  if (isPrivateHost(target.hostname)) {
+  if (!isSafeRemoteHttpUrl(validation.url)) {
     throw new MetadataUnavailableError("That destination is not allowed.");
   }
+  const target = new URL(validation.url);
 
   if (isYouTubeHost(target.hostname)) {
     try {
@@ -75,9 +73,8 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(validation.url, {
+    const { response, finalUrl } = await fetchSafeRemote(validation.url, {
       signal: controller.signal,
-      redirect: "follow",
       headers: { Accept: "text/html,application/xhtml+xml" },
     });
 
@@ -90,13 +87,12 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
       throw new MetadataUnavailableError("This link is not a web page.");
     }
 
-    const contentLength = Number(response.headers.get("content-length") ?? "0");
-    if (contentLength > MAX_HTML_CHARACTERS) {
-      throw new MetadataUnavailableError("This page is too large to preview.");
-    }
-
-    const html = (await response.text()).slice(0, MAX_HTML_CHARACTERS);
-    return parseMetadata(html, validation.url);
+    const html = await readBoundedText(
+      response,
+      MAX_HTML_BYTES,
+      MAX_HTML_CHARACTERS
+    );
+    return parseMetadata(html, finalUrl);
   } catch (error) {
     if (error instanceof MetadataUnavailableError) {
       throw error;
@@ -116,9 +112,8 @@ async function fetchRedditSocialPreview(
   try {
     // Reddit serves compact Open Graph tags and its generated share card to
     // social crawlers. This is the same preview X/Twitter shows for the link.
-    const response = await fetch(url, {
+    const { response, finalUrl } = await fetchSafeRemote(url, {
       signal: controller.signal,
-      redirect: "follow",
       headers: {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent": REDDIT_PREVIEW_USER_AGENT,
@@ -134,8 +129,12 @@ async function fetchRedditSocialPreview(
       return null;
     }
 
-    const html = (await response.text()).slice(0, MAX_HTML_CHARACTERS);
-    const metadata = parseMetadata(html, url);
+    const html = await readBoundedText(
+      response,
+      MAX_HTML_BYTES,
+      MAX_HTML_CHARACTERS
+    );
+    const metadata = parseMetadata(html, finalUrl);
     if (!metadata.imageUrl) {
       return null;
     }
@@ -167,7 +166,7 @@ async function fetchYouTubeMetadata(url: string): Promise<LinkMetadata> {
   const timeout = setTimeout(() => controller.abort(), YOUTUBE_TIMEOUT_MS);
 
   try {
-    const response = await fetch(endpoint, {
+    const { response } = await fetchSafeRemote(endpoint, {
       signal: controller.signal,
       headers: { Accept: "application/json" },
     });
@@ -181,7 +180,11 @@ async function fetchYouTubeMetadata(url: string): Promise<LinkMetadata> {
       throw new MetadataUnavailableError();
     }
 
-    const body = (await response.text()).slice(0, MAX_OEMBED_CHARACTERS);
+    const body = await readBoundedText(
+      response,
+      MAX_OEMBED_BYTES,
+      MAX_OEMBED_CHARACTERS
+    );
     const data: unknown = JSON.parse(body);
     if (!isRecord(data)) {
       throw new MetadataUnavailableError();
@@ -272,7 +275,7 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
   let canonicalUrl = url;
 
   try {
-    const response = await fetch(oembedEndpoint, {
+    const { response } = await fetchSafeRemote(oembedEndpoint, {
       signal: oembedController.signal,
       headers: { Accept: "application/json" },
     });
@@ -287,7 +290,11 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
     }
 
     const data: unknown = JSON.parse(
-      (await response.text()).slice(0, MAX_OEMBED_CHARACTERS)
+      await readBoundedText(
+        response,
+        MAX_OEMBED_BYTES,
+        MAX_OEMBED_CHARACTERS
+      )
     );
     if (!isRecord(data) || typeof data.title !== "string") {
       return null;
@@ -324,7 +331,7 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
     embedUrl.search = "";
     embedUrl.hash = "";
 
-    const response = await fetch(embedUrl.toString(), {
+    const { response } = await fetchSafeRemote(embedUrl.toString(), {
       signal: embedController.signal,
       headers: { Accept: "text/html" },
     });
@@ -332,8 +339,11 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
     if (response.ok) {
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.toLowerCase().includes("text/html")) {
-        const html = (await response.text())
-          .slice(0, MAX_REDDIT_CHARACTERS)
+        const html = (await readBoundedText(
+          response,
+          MAX_HTML_BYTES,
+          MAX_REDDIT_CHARACTERS
+        ))
           .replace(/&quot;/g, '"')
           .replace(/&amp;/g, "&");
         const candidates =
@@ -360,7 +370,8 @@ async function fetchRedditMetadata(url: string): Promise<LinkMetadata | null> {
   };
 }
 
-function parseMetadata(html: string, fallbackUrl: string): LinkMetadata {  const documentTitle = readElementText(html, "title");
+function parseMetadata(html: string, fallbackUrl: string): LinkMetadata {
+  const documentTitle = readElementText(html, "title");
   const ogTitle = readMetaContent(html, "og:title") ?? readMetaContent(html, "twitter:title");
   const description =
     readMetaContent(html, "og:description") ??
@@ -431,7 +442,7 @@ function readSafeRemoteUrl(candidate: string | null, fallbackUrl: string): strin
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
-    if (isPrivateHost(parsed.hostname)) {
+    if (!isSafeRemoteHttpUrl(parsed.toString())) {
       return null;
     }
     return parsed.toString();
@@ -487,14 +498,4 @@ function decodeHtmlEntities(value: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function isPrivateHost(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return (
-    PRIVATE_HOST_PATTERN.test(normalized) ||
-    normalized.endsWith(".local") ||
-    normalized === "[::1]" ||
-    normalized === "::1"
-  );
 }

@@ -1,6 +1,8 @@
 import { Directory, File, Paths } from "expo-file-system";
 
 import { isSafeRemoteHttpUrl } from "@/shared/utils/safeRemoteUrl";
+import { fetchSafeRemote } from "@/shared/utils/safeFetch";
+import { readBoundedArrayBuffer } from "@/shared/utils/boundedResponse";
 
 const PREVIEW_DIRECTORY_SEGMENTS = ["paperclip", "previews", "public"] as const;
 const PREVIEW_DIRECTORY_PATH = PREVIEW_DIRECTORY_SEGMENTS.join("/");
@@ -138,30 +140,14 @@ async function fetchPreviewResponse(
   imageUrl: string,
   signal: AbortSignal
 ): Promise<Response> {
-  let currentUrl = imageUrl;
-  for (let hop = 0; hop <= 3; hop += 1) {
-    if (!isSafeRemoteHttpUrl(currentUrl)) {
-      throw new Error("Unsupported preview image URL.");
-    }
-    const response = await fetch(currentUrl, {
-      signal,
-      redirect: "manual",
-      headers: { Accept: "image/*" },
-    });
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location) {
-        throw new Error("Preview image redirect had no destination.");
-      }
-      currentUrl = new URL(location, currentUrl).toString();
-      continue;
-    }
-    if (response.url && !isSafeRemoteHttpUrl(response.url)) {
-      throw new Error("Preview image redirected to an unsupported destination.");
-    }
-    return response;
+  if (!isSafeRemoteHttpUrl(imageUrl)) {
+    throw new Error("Unsupported preview image URL.");
   }
-  throw new Error("Preview image redirected too many times.");
+  const { response } = await fetchSafeRemote(imageUrl, {
+    signal,
+    headers: { Accept: "image/*" },
+  });
+  return response;
 }
 
 /**
@@ -187,16 +173,7 @@ export async function downloadPreviewImage(
       .trim()
       .toLowerCase();
 
-    const declaredSize = Number(response.headers.get("content-length") ?? "0");
-    if (declaredSize > MAX_IMAGE_BYTES) {
-      throw new Error("Preview image is too large.");
-    }
-
-    const bytes = await response.arrayBuffer();
-    if (bytes.byteLength > MAX_IMAGE_BYTES) {
-      throw new Error("Preview image is too large.");
-    }
-
+    const bytes = await readBoundedArrayBuffer(response, MAX_IMAGE_BYTES);
     const extension =
       EXTENSION_BY_CONTENT_TYPE[contentType] ?? detectImageExtension(bytes);
 
