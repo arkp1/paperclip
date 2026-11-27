@@ -34,6 +34,33 @@ test("pagination splits content into multiple pages", () => {
   assert.ok(pages.every((page) => page.blocks.length > 0));
 });
 
+test("images share a page with short text when space allows", () => {
+  const blocks = [
+    { type: "image", src: "https://example.com/a.jpg", alt: "A" },
+    { type: "paragraph", text: "A short caption-sized sentence." },
+  ];
+  const pages = paginate(blocks, 16, 360, 700, 1.6, 12, 0.52);
+  assert.equal(pages.length, 1);
+  assert.equal(pages[0].blocks.length, 2);
+});
+
+test("a following paragraph fills the remainder of an image/heading page", () => {
+  const blocks = [
+    { type: "image", src: "https://example.com/a.jpg", alt: "A" },
+    { type: "heading", text: "Xreal One Pro AR glasses" },
+    {
+      type: "paragraph",
+      text: "Who says you cannot travel with a big screen? ".repeat(8),
+    },
+  ];
+  const pages = paginate(blocks, 16, 360, 800, 1.6, 12, 0.52);
+  const paragraph = pages[0].blocks.find((block) => block.type === "paragraph");
+  assert.ok(paragraph);
+  assert.equal(blocks[2].text.startsWith(paragraph.text), true);
+});
+
+
+
 test("stable block keys are deterministic and occurrence-aware", () => {
   assert.equal(stableBlockKey("article", 0), stableBlockKey("article", 0));
   assert.notEqual(stableBlockKey("article", 0), stableBlockKey("article", 1));

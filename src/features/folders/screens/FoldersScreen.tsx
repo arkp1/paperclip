@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { Alert, FlatList, RefreshControl, ToastAndroid, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
@@ -23,6 +23,7 @@ import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
+import { haptics } from "@/shared/utils/haptics";
 import { styles } from "@/styles/features/folders/FoldersScreen.styles";
 import { useTheme } from "@/theme";
 
@@ -62,6 +63,8 @@ export function FoldersScreen() {
   ): Promise<string | null> => {
     try {
       await create(name, colorKey);
+      haptics.success();
+      ToastAndroid.show("Folder created", ToastAndroid.SHORT);
       return null;
     } catch (error) {
       return describeFolderError(error);

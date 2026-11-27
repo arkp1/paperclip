@@ -13,6 +13,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 
@@ -61,9 +62,11 @@ export function OverflowMenu({
     if (visible) {
       setRendered(true);
       progress.value = 0;
-      progress.value = withTiming(1, {
-        duration: motion.menuIn,
-        easing: Easing.bezier(0.2, 0, 0, 1),
+      progress.value = withSpring(1, {
+        damping: 26,
+        stiffness: 320,
+        mass: 0.85,
+        overshootClamping: true,
       });
       return;
     }
@@ -93,15 +96,18 @@ export function OverflowMenu({
     return () => subscription.remove();
   }, [onClose, rendered]);
 
-  const surfaceStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [
-      { translateY: (1 - progress.value) * 4 },
-      { scale: 0.9 + progress.value * 0.1 },
-    ],
-  }));
+  const surfaceStyle = useAnimatedStyle(() => {
+    const value = Math.min(1, progress.value);
+    return {
+      opacity: value,
+      transform: [
+        { translateY: (1 - value) * 6 },
+        { scale: 0.92 + value * 0.08 },
+      ],
+    };
+  });
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
+    opacity: Math.min(1, progress.value),
   }));
 
   if (!rendered) {

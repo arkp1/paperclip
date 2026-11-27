@@ -277,8 +277,8 @@ export function HomeScreen() {
             style={[
               styles.searchField,
               {
-                backgroundColor: theme.colors.surface,
-                borderColor: theme.colors.outline,
+                backgroundColor: theme.colors.surfaceContainerLow,
+                borderColor: theme.colors.outlineVariant,
               },
             ]}
           >

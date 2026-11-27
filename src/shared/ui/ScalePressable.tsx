@@ -79,13 +79,13 @@ export function ScalePressable({
     setInkVisible(true);
 
     inkScale.value = withTiming(1, {
-      duration: 420,
+      duration: 320,
       easing: Easing.out(Easing.cubic),
     });
     inkOpacity.value = withTiming(
       0,
       {
-        duration: 420,
+        duration: 320,
         easing: Easing.out(Easing.cubic),
       },
       (finished) => {
@@ -97,13 +97,14 @@ export function ScalePressable({
   };
 
   const animateScale = (value: number) => {
-    if (reduceMotion || pressFeedback !== "scale") {
+    if (reduceMotion || pressFeedback === "none") {
       return;
     }
     scale.value = withSpring(value, {
-      damping: 18,
-      stiffness: 340,
-      mass: 0.45,
+      damping: 22,
+      stiffness: 420,
+      mass: 0.5,
+      overshootClamping: true,
     });
   };
 
@@ -135,7 +136,7 @@ export function ScalePressable({
         animateScale(1);
         onPressOut?.(event);
       }}
-      style={[style, pressFeedback === "scale" ? scaleStyle : undefined]}
+      style={[style, pressFeedback !== "none" ? scaleStyle : undefined]}
     >
       {inkVisible ? (
         <Animated.View

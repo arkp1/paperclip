@@ -26,6 +26,9 @@ type TextFieldProps = {
   keyboardType?: TextFieldKeyboardType;
   onSubmitEditing?: () => void;
   inputRef?: Ref<TextFieldRef>;
+  containerColor?: string;
+  indicatorColor?: string;
+  shapeRadius?: number;
 };
 
 /**
@@ -46,6 +49,9 @@ export function TextField({
   keyboardType = "text",
   onSubmitEditing,
   inputRef,
+  containerColor,
+  indicatorColor,
+  shapeRadius = 12,
 }: TextFieldProps) {
   const { theme } = useTheme();
   const { colors } = theme;
@@ -66,7 +72,12 @@ export function TextField({
         isError={hasError}
         textStyle={{ fontFamily: "GoogleSansFlex-Regular" }}
         shape={Shape.RoundedCorner({
-          cornerRadii: { topStart: 12, topEnd: 12, bottomStart: 12, bottomEnd: 12 },
+          cornerRadii: {
+            topStart: shapeRadius,
+            topEnd: shapeRadius,
+            bottomStart: shapeRadius,
+            bottomEnd: shapeRadius,
+          },
         })}
         keyboardOptions={{
           imeAction: onSubmitEditing ? "done" : "default",
@@ -77,14 +88,14 @@ export function TextField({
           focusedTextColor: colors.onSurface,
           unfocusedTextColor: colors.onSurface,
           errorTextColor: colors.onSurface,
-          focusedContainerColor: colors.surface,
-          unfocusedContainerColor: colors.surface,
-          errorContainerColor: colors.surface,
+          focusedContainerColor: containerColor ?? colors.surface,
+          unfocusedContainerColor: containerColor ?? colors.surface,
+          errorContainerColor: containerColor ?? colors.surface,
           disabledContainerColor: colors.surfaceContainer,
           cursorColor: colors.primary,
           errorCursorColor: colors.error,
           focusedIndicatorColor: colors.primary,
-          unfocusedIndicatorColor: colors.outline,
+          unfocusedIndicatorColor: indicatorColor ?? colors.outline,
           errorIndicatorColor: colors.error,
           focusedLabelColor: colors.primary,
           unfocusedLabelColor: colors.onSurfaceVariant,

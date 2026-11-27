@@ -78,12 +78,14 @@ export const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 2,
+    height: 3,
     backgroundColor: "rgba(120, 112, 130, 0.18)",
+    overflow: "hidden",
     zIndex: 4,
   },
   progressFill: {
-    height: 2,
+    height: "100%",
+    minWidth: 4,
   },
   fallback: {
     flex: 1,

@@ -28,84 +28,131 @@ export function paginate(
   charWidthFactor: number
 ): ReaderPage[] {
   const lineHeight = fontSize * lineHeightMultiplier;
-  const contentHeight = Math.max(260, height - 250);
+  const contentHeight = Math.max(220, height - 200);
   const charsPerLine = Math.max(18, width / (fontSize * charWidthFactor));
-  const viewportBudget = Math.max(
-    280,
-    Math.floor((contentHeight / lineHeight) * charsPerLine * 0.82)
+  const maxCharsPerPage = Math.max(
+    120,
+    Math.floor((contentHeight / lineHeight) * charsPerLine * 0.94)
   );
+  const imageBlockHeight = 180;
   const pages: ReaderPage[] = [];
   let current: ArticleBlock[] = [];
-  let used = 220;
+  let usedHeight = 0;
+
+  const pushPage = () => {
+    if (current.length > 0) {
+      pages.push({ key: `page-${pages.length}`, blocks: current });
+      current = [];
+      usedHeight = 0;
+    }
+  };
 
   for (const originalBlock of blocks) {
-    const blocksForPage =
-      originalBlock.type === "image"
-        ? [originalBlock]
-        : splitLongTextBlock(originalBlock, Math.floor(viewportBudget * 0.92));
-
-    for (const block of blocksForPage) {
-      const size =
-        block.type === "image"
-          ? 0
-          : block.text.length + (block.type === "heading" ? 100 : 0);
-      if (current.length > 0 && used + size > viewportBudget) {
-        pages.push({ key: `page-${pages.length}`, blocks: current });
-        current = [];
-        used = 0;
+    if (originalBlock.type === "image") {
+      if (current.length > 0 && usedHeight + imageBlockHeight > contentHeight) {
+        pushPage();
       }
-      current.push(block);
-      used += size + paragraphSpacing;
+      current.push(originalBlock);
+      usedHeight += imageBlockHeight;
+      continue;
     }
-  }
 
-  if (current.length > 0) {
-    pages.push({ key: `page-${pages.length}`, blocks: current });
-  }
+    if (originalBlock.type === "heading") {
+      const lines = Math.max(
+        1,
+        Math.ceil(originalBlock.text.length / charsPerLine)
+      );
+      const headingHeight = lines * lineHeight + 26;
+      const minimumFollowingText = lineHeight * 2;
+      if (
+        current.length > 0 &&
+        usedHeight + headingHeight + minimumFollowingText > contentHeight
+      ) {
+        pushPage();
+      }
+      current.push(originalBlock);
+      usedHeight += headingHeight;
+      continue;
+    }
 
-  if (pages.length > 0) {
-    const merged: ReaderPage[] = [];
-    for (let index = 0; index < pages.length; index += 1) {
-      const page = pages[index];
-      const imageOnly =
-        page.blocks.length > 0 &&
-        page.blocks.every((block) => block.type === "image");
-      if (!imageOnly) {
-        merged.push(page);
+    let remainingText = originalBlock.text;
+    while (remainingText.length > 0) {
+      const overhead = paragraphSpacing + 4;
+      const availableHeight = contentHeight - usedHeight - overhead;
+      const linesThatFit = Math.floor(availableHeight / lineHeight);
+      const charsThatFit = Math.max(
+        0,
+        Math.floor(linesThatFit * charsPerLine * 0.94)
+      );
+      const minimumUsefulChunk = Math.max(40, charsPerLine * 2);
+
+      if (
+        current.length > 0 &&
+        charsThatFit < minimumUsefulChunk
+      ) {
+        pushPage();
         continue;
       }
 
-      const next = pages[index + 1];
-      if (next) {
-        next.blocks = [...page.blocks, ...next.blocks];
+      const chunkLimit = Math.min(
+        maxCharsPerPage,
+        Math.max(charsPerLine, charsThatFit)
+      );
+      const chunk = takeTextChunk(remainingText, chunkLimit);
+      if (!chunk.text) {
+        break;
+      }
+
+      const lines = Math.max(1, Math.ceil(chunk.text.length / charsPerLine));
+      const blockHeight = lines * lineHeight + overhead;
+      if (current.length > 0 && usedHeight + blockHeight > contentHeight) {
+        pushPage();
         continue;
       }
 
-      if (merged.length > 0) {
-        merged[merged.length - 1].blocks.push(...page.blocks);
-      } else {
-        merged.push(page);
+      current.push({ ...originalBlock, text: chunk.text });
+      usedHeight += blockHeight;
+      remainingText = chunk.rest;
+      if (remainingText.length > 0) {
+        pushPage();
       }
     }
-
-    return merged.map((page, index) => ({
-      ...page,
-      key: `page-${index}`,
-    }));
   }
 
-  return [{ key: "page-0", blocks: [] }];
+  pushPage();
+  return pages.length > 0
+    ? pages.map((page, index) => ({ ...page, key: `page-${index}` }))
+    : [{ key: "page-0", blocks: [] }];
+}
+
+export type ReaderTextBlock = Extract<ArticleBlock, { text: string }>;
+
+function takeTextChunk(
+  text: string,
+  maxLength: number
+): { text: string; rest: string } {
+  if (text.length <= maxLength) {
+    return { text, rest: "" };
+  }
+  let cut = text.lastIndexOf(" ", maxLength);
+  if (cut < Math.floor(maxLength * 0.55)) {
+    cut = maxLength;
+  }
+  return {
+    text: text.slice(0, cut).trim(),
+    rest: text.slice(cut).trim(),
+  };
 }
 
 export function splitLongTextBlock(
-  block: Extract<ArticleBlock, { text: string }>,
+  block: ReaderTextBlock,
   maxLength: number
-): ArticleBlock[] {
+): ReaderTextBlock[] {
   if (block.text.length <= maxLength) {
     return [block];
   }
 
-  const parts: ArticleBlock[] = [];
+  const parts: ReaderTextBlock[] = [];
   let remaining = block.text;
   while (remaining.length > maxLength) {
     let cut = remaining.lastIndexOf(" ", maxLength);
