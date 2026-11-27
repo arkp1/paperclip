@@ -2,6 +2,7 @@
 
 import {
   FlexWidget,
+  ImageWidget,
   ListWidget,
   TextWidget,
 } from "react-native-android-widget";
@@ -219,10 +220,20 @@ export function PaperclipLargeWidget({
                   marginRight: 10,
                 }}
               >
-                <TextWidget
-                  text={bookmark.title.slice(0, 1).toUpperCase()}
-                  style={{ fontSize: 15, color: colors.primary }}
-                />
+                {bookmark.thumbnail ? (
+                  <ImageWidget
+                    image={bookmark.thumbnail}
+                    imageWidth={34}
+                    imageHeight={34}
+                    radius={10}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <TextWidget
+                    text={bookmark.title.slice(0, 1).toUpperCase()}
+                    style={{ fontSize: 15, color: colors.primary }}
+                  />
+                )}
               </FlexWidget>
               <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
                 <TextWidget

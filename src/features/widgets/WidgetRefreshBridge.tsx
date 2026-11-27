@@ -1,34 +1,34 @@
 import { useEffect, useRef } from "react";
+import { AppState } from "react-native";
 
 import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
 
 /**
- * Mirrors saved-library changes to the home-screen widgets. Widgets are a
- * cache of public data only; locked private bookmarks are excluded by the
- * repository query.
+ * Mirrors saved-library changes to the home-screen widgets when Paperclip
+ * leaves the foreground. Updating there avoids starting a widget headless task
+ * in the middle of a save/navigation interaction.
  */
 export function WidgetRefreshBridge() {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirty = useRef(false);
 
   useEffect(() => {
-    const schedule = () => {
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
-      timer.current = setTimeout(() => {
-        timer.current = null;
-        void import("@/features/widgets/widgetUpdater")
-          .then((module) => module.refreshPaperclipWidgets())
-          .catch(() => undefined);
-      }, 500);
+    const markDirty = () => {
+      dirty.current = true;
     };
+    const unsubscribe = subscribeBookmarkChanges(markDirty);
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active" || !dirty.current) {
+        return;
+      }
+      dirty.current = false;
+      void import("@/features/widgets/widgetUpdater")
+        .then((module) => module.refreshPaperclipWidgets())
+        .catch(() => undefined);
+    });
 
-    const unsubscribe = subscribeBookmarkChanges(schedule);
     return () => {
       unsubscribe();
-      if (timer.current) {
-        clearTimeout(timer.current);
-      }
+      appState.remove();
     };
   }, []);
 
