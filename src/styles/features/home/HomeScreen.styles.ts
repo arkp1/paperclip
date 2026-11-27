@@ -65,7 +65,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing[3],
     paddingHorizontal: spacing[4],
-    borderRadius: 16,
+    borderRadius: 999,
     borderWidth: 1,
   },
   overviewSection: {
