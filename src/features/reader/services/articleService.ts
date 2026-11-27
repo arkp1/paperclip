@@ -7,6 +7,9 @@ import {
 } from "@/core/database/privateVaultRepository";
 import { getReadableBookmarkById } from "@/features/bookmarks/data/bookmarkRepository";
 import { isReadableArticleUrl } from "@/features/reader/utils/isReadableArticleUrl";
+import { isSafeRemoteHttpUrl } from "@/shared/utils/safeRemoteUrl";
+import { fetchSafeRemote } from "@/shared/utils/safeFetch";
+import { readBoundedText } from "@/shared/utils/boundedResponse";
 
 export type ArticleBlock =
   | {
@@ -31,10 +34,7 @@ const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const ARTICLE_CACHE_VERSION = 2;
 const MAX_HTML_CHARACTERS = 1_500_000;
 const MAX_HTML_BYTES = 3_000_000;
-const MAX_REDIRECTS = 5;
 const REQUEST_TIMEOUT_MS = 10_000;
-const PRIVATE_HOST_PATTERN =
-  /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|198\.(1[89]|2\d)\.|\[?(::1|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|fe[89ab][0-9a-f]:))/i;
 
 /**
  * Loads cached article text for a bookmark, or downloads and caches it.
@@ -175,129 +175,49 @@ async function fetchArticle(url: string): Promise<CachedArticle> {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    let currentUrl = url;
+    const { response, finalUrl } = await fetchSafeRemote(url, {
+      signal: controller.signal,
+      headers: { Accept: "text/html,application/xhtml+xml" },
+    });
 
-    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-      assertFetchableArticleUrl(currentUrl);
-
-      const response = await fetch(currentUrl, {
-        signal: controller.signal,
-        redirect: "manual",
-        headers: { Accept: "text/html,application/xhtml+xml" },
-      });
-
-      if (response.url) {
-        assertFetchableArticleUrl(response.url);
-      }
-
-      if (isRedirectStatus(response.status)) {
-        if (redirects === MAX_REDIRECTS) {
-          throw new Error("The article redirected too many times.");
-        }
-
-        const location = response.headers.get("location");
-        await response.body?.cancel().catch(() => undefined);
-        if (!location) {
-          throw new Error("The article redirect was invalid.");
-        }
-
-        currentUrl = new URL(location, currentUrl).toString();
-        continue;
-      }
-
-      if (!response.ok) {
-        throw new Error("The article could not be downloaded.");
-      }
-
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.toLowerCase().includes("html")) {
-        throw new Error("This link is not an article page.");
-      }
-
-      const html = await readBoundedHtml(response);
-      const blocks = extractBlocks(html, currentUrl);
-      if (blocks.length === 0) {
-        throw new Error("No readable article text was found.");
-      }
-
-      const wordCount = blocks.reduce(
-        (count, block) =>
-          count +
-          (block.type === "image" ? 0 : block.text.split(/\s+/).length),
-        0
-      );
-
-      return { blocks, wordCount, fetchedAt: Date.now() };
+    if (!response.ok) {
+      throw new Error("The article could not be downloaded.");
+    }
+    if (!isReadableArticleUrl(finalUrl)) {
+      throw new Error("This link cannot be read in the app.");
     }
 
-    throw new Error("The article could not be downloaded.");
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("html")) {
+      throw new Error("This link is not an article page.");
+    }
+
+    const html = await readBoundedText(
+      response,
+      MAX_HTML_BYTES,
+      MAX_HTML_CHARACTERS
+    );
+    const blocks = extractBlocks(html, finalUrl);
+    if (blocks.length === 0) {
+      throw new Error("No readable article text was found.");
+    }
+
+    const wordCount = blocks.reduce(
+      (count, block) =>
+        count + (block.type === "image" ? 0 : block.text.split(/\s+/).length),
+      0
+    );
+
+    return { blocks, wordCount, fetchedAt: Date.now() };
   } finally {
     clearTimeout(timeout);
   }
 }
 
 function assertFetchableArticleUrl(rawUrl: string): void {
-  const parsed = new URL(rawUrl);
-  if (
-    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
-    PRIVATE_HOST_PATTERN.test(parsed.hostname.toLowerCase()) ||
-    !isReadableArticleUrl(rawUrl)
-  ) {
+  if (!isSafeRemoteHttpUrl(rawUrl) || !isReadableArticleUrl(rawUrl)) {
     throw new Error("This link cannot be read in the app.");
   }
-}
-
-function isRedirectStatus(status: number): boolean {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
-}
-
-async function readBoundedHtml(response: Response): Promise<string> {
-  const body = response.body;
-  const declaredSize = Number(response.headers.get("content-length") ?? "0");
-  if (declaredSize > MAX_HTML_BYTES) {
-    await body?.cancel().catch(() => undefined);
-    throw new Error("The article page is too large.");
-  }
-
-  if (!body || typeof body.getReader !== "function" || typeof TextDecoder === "undefined") {
-    return (await response.text()).slice(0, MAX_HTML_CHARACTERS);
-  }
-
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      if (!value) {
-        continue;
-      }
-
-      totalBytes += value.byteLength;
-      if (totalBytes > MAX_HTML_BYTES) {
-        await reader.cancel().catch(() => undefined);
-        throw new Error("The article page is too large.");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock?.();
-  }
-
-  const merged = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return new TextDecoder("utf-8")
-    .decode(merged)
-    .slice(0, MAX_HTML_CHARACTERS);
 }
 
 function extractBlocks(html: string, baseUrl: string): ArticleBlock[] {
@@ -404,10 +324,7 @@ function readAttribute(attributes: string, name: string): string | null {
 function safeImageUrl(source: string, baseUrl: string): string | null {
   try {
     const resolved = new URL(decodeEntities(source), baseUrl);
-    if (
-      (resolved.protocol !== "http:" && resolved.protocol !== "https:") ||
-      PRIVATE_HOST_PATTERN.test(resolved.hostname.toLowerCase())
-    ) {
+    if (!isSafeRemoteHttpUrl(resolved.toString())) {
       return null;
     }
     return resolved.toString();
