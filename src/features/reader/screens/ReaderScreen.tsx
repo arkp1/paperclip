@@ -1520,7 +1520,7 @@ function ArticleImageBlock({
         <Image
           source={{ uri: block.src }}
           style={[styles.image, paginated && styles.pageImage]}
-          contentFit="contain"
+          contentFit="cover"
           cachePolicy="memory"
           transition={150}
           accessibilityLabel={block.alt}

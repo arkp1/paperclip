@@ -57,17 +57,65 @@ export function paginate(
       continue;
     }
 
-    const chunks = splitLongTextBlock(originalBlock, maxCharsPerPage);
-    for (const block of chunks) {
-      const lines = Math.max(1, Math.ceil(block.text.length / charsPerLine));
-      const blockHeight =
-        lines * lineHeight +
-        (block.type === "heading" ? 26 : paragraphSpacing + 4);
-      if (current.length > 0 && usedHeight + blockHeight > contentHeight) {
+    if (originalBlock.type === "heading") {
+      const lines = Math.max(
+        1,
+        Math.ceil(originalBlock.text.length / charsPerLine)
+      );
+      const headingHeight = lines * lineHeight + 26;
+      const minimumFollowingText = lineHeight * 2;
+      if (
+        current.length > 0 &&
+        usedHeight + headingHeight + minimumFollowingText > contentHeight
+      ) {
         pushPage();
       }
-      current.push(block);
+      current.push(originalBlock);
+      usedHeight += headingHeight;
+      continue;
+    }
+
+    let remainingText = originalBlock.text;
+    while (remainingText.length > 0) {
+      const overhead = paragraphSpacing + 4;
+      const availableHeight = contentHeight - usedHeight - overhead;
+      const linesThatFit = Math.floor(availableHeight / lineHeight);
+      const charsThatFit = Math.max(
+        0,
+        Math.floor(linesThatFit * charsPerLine * 0.94)
+      );
+      const minimumUsefulChunk = Math.max(40, charsPerLine * 2);
+
+      if (
+        current.length > 0 &&
+        charsThatFit < minimumUsefulChunk
+      ) {
+        pushPage();
+        continue;
+      }
+
+      const chunkLimit = Math.min(
+        maxCharsPerPage,
+        Math.max(charsPerLine, charsThatFit)
+      );
+      const chunk = takeTextChunk(remainingText, chunkLimit);
+      if (!chunk.text) {
+        break;
+      }
+
+      const lines = Math.max(1, Math.ceil(chunk.text.length / charsPerLine));
+      const blockHeight = lines * lineHeight + overhead;
+      if (current.length > 0 && usedHeight + blockHeight > contentHeight) {
+        pushPage();
+        continue;
+      }
+
+      current.push({ ...originalBlock, text: chunk.text });
       usedHeight += blockHeight;
+      remainingText = chunk.rest;
+      if (remainingText.length > 0) {
+        pushPage();
+      }
     }
   }
 
@@ -78,6 +126,23 @@ export function paginate(
 }
 
 export type ReaderTextBlock = Extract<ArticleBlock, { text: string }>;
+
+function takeTextChunk(
+  text: string,
+  maxLength: number
+): { text: string; rest: string } {
+  if (text.length <= maxLength) {
+    return { text, rest: "" };
+  }
+  let cut = text.lastIndexOf(" ", maxLength);
+  if (cut < Math.floor(maxLength * 0.55)) {
+    cut = maxLength;
+  }
+  return {
+    text: text.slice(0, cut).trim(),
+    rest: text.slice(cut).trim(),
+  };
+}
 
 export function splitLongTextBlock(
   block: ReaderTextBlock,
