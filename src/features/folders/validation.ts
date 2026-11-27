@@ -5,7 +5,13 @@ export const FOLDER_NAME_MAX_LENGTH = 40;
  * user-created folder, otherwise the library would show two different things
  * with the same label.
  */
-const RESERVED_FOLDER_NAMES = new Set(["all bookmarks", "uncategorized"]);
+const RESERVED_FOLDER_NAMES = new Set([
+  "all bookmarks",
+  "uncategorized",
+  "favourites",
+  "favorites",
+  "private",
+]);
 
 export type FolderNameValidation =
   | { valid: true; name: string }

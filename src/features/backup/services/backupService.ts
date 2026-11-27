@@ -7,6 +7,7 @@ import {
   PUBLIC_FOLDER_TRANSFER_FILTER,
 } from "@/core/database/vaultTransferState";
 import { refreshBookmarkPreview } from "@/features/bookmarks/services/previewService";
+import { validateFolderName } from "@/features/folders/validation";
 import { validateHttpUrl } from "@/shared/utils/url";
 
 export type BackupSummary = {
@@ -204,12 +205,14 @@ export async function applyBackup(
   await database.withTransactionAsync(async () => {
     for (const folder of document.folders) {
       const id = readId(folder.id);
-      const name = readString(folder.name);
+      const rawName = readString(folder.name);
+      const nameValidation = rawName ? validateFolderName(rawName) : null;
+      const name = nameValidation?.valid ? nameValidation.name : null;
       if (
         !id ||
         !name ||
         existingFolderIds.has(id) ||
-        existingNames.has(name.trim().toLowerCase())
+        existingNames.has(name.toLowerCase())
       ) {
         continue;
       }

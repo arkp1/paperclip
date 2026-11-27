@@ -358,19 +358,30 @@ export async function getBookmarkById(id: string): Promise<Bookmark | null> {
 export async function findBookmarkByUrl(rawUrl: string): Promise<Bookmark | null> {
   const database = await getDatabase();
   const normalized = normalizeUrlForComparison(rawUrl);
+  const pageSize = 500;
+  let offset = 0;
 
-  const rows = await database.getAllAsync<BookmarkRow>(
-    `${BOOKMARK_SELECT}
-     WHERE ${PUBLIC_BOOKMARKS_FILTER}
-     ORDER BY b.created_at DESC
-     LIMIT 500`
-  );
+  while (true) {
+    const rows = await database.getAllAsync<BookmarkRow>(
+      `${BOOKMARK_SELECT}
+       WHERE ${PUBLIC_BOOKMARKS_FILTER}
+       ORDER BY b.created_at DESC, b.id DESC
+       LIMIT ? OFFSET ?`,
+      pageSize,
+      offset
+    );
 
-  const match = rows.find(
-    (row) => normalizeUrlForComparison(row.originalUrl) === normalized
-  );
-
-  return match ? mapBookmarkRow(match) : null;
+    const match = rows.find(
+      (row) => normalizeUrlForComparison(row.originalUrl) === normalized
+    );
+    if (match) {
+      return mapBookmarkRow(match);
+    }
+    if (rows.length < pageSize) {
+      return null;
+    }
+    offset += pageSize;
+  }
 }
 
 export async function setBookmarkFavorite(

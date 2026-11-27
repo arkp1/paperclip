@@ -362,6 +362,43 @@ export async function movePublicFolderToVaultSafe(
     );
   }
 
+  const currentFolder = await main.getFirstAsync<{
+    name: string;
+    iconKey: string | null;
+    colorKey: string | null;
+    sortOrder: number;
+  }>(
+    `SELECT name, icon_key AS iconKey, color_key AS colorKey,
+            sort_order AS sortOrder
+     FROM folders WHERE id = ?`,
+    folderId
+  );
+  const currentBookmarks = await main.getAllAsync<{
+    id: string;
+    updatedAt: number;
+  }>(
+    "SELECT id, updated_at AS updatedAt FROM bookmarks WHERE folder_id = ?",
+    folderId
+  );
+  const snapshotUpdatedAt = new Map(
+    bookmarks.map((bookmark) => [bookmark.id, bookmark.updatedAt])
+  );
+  if (
+    !currentFolder ||
+    currentFolder.name !== folder.name ||
+    currentFolder.iconKey !== folder.iconKey ||
+    currentFolder.colorKey !== folder.colorKey ||
+    currentFolder.sortOrder !== folder.sortOrder ||
+    currentBookmarks.length !== bookmarks.length ||
+    currentBookmarks.some(
+      (bookmark) => snapshotUpdatedAt.get(bookmark.id) !== bookmark.updatedAt
+    )
+  ) {
+    throw new Error(
+      "The folder changed while it was being moved. No source data was deleted; retry the move."
+    );
+  }
+
   // Remove plaintext assets only after the encrypted copies are durable.
   const undeletedPreviewPaths: string[] = [];
   for (const bookmark of bookmarks) {
@@ -378,7 +415,38 @@ export async function movePublicFolderToVaultSafe(
 
   await main.execAsync("PRAGMA secure_delete = ON;");
   await main.withTransactionAsync(async () => {
+    const updatedFolder = await main.getFirstAsync<{
+      name: string;
+      iconKey: string | null;
+      colorKey: string | null;
+      sortOrder: number;
+    }>(
+      `SELECT name, icon_key AS iconKey, color_key AS colorKey,
+              sort_order AS sortOrder
+       FROM folders WHERE id = ?`,
+      folderId
+    );
+    if (
+      !updatedFolder ||
+      updatedFolder.name !== folder.name ||
+      updatedFolder.iconKey !== folder.iconKey ||
+      updatedFolder.colorKey !== folder.colorKey ||
+      updatedFolder.sortOrder !== folder.sortOrder
+    ) {
+      throw new Error(
+        "The folder changed while it was being moved. The source folder was preserved."
+      );
+    }
     for (const bookmark of bookmarks) {
+      const updated = await main.getFirstAsync<{ updatedAt: number }>(
+        "SELECT updated_at AS updatedAt FROM bookmarks WHERE id = ?",
+        bookmark.id
+      );
+      if (!updated || updated.updatedAt !== bookmark.updatedAt) {
+        throw new Error(
+          "The folder changed while it was being moved. The source folder was preserved."
+        );
+      }
       await main.runAsync("DELETE FROM bookmarks WHERE id = ?", bookmark.id);
       await main.runAsync(
         "DELETE FROM app_settings WHERE key IN (?, ?)",
@@ -629,6 +697,15 @@ export async function movePublicBookmarkToVaultSafe(
       preview
     );
   });
+  const current = await main.getFirstAsync<{ updatedAt: number }>(
+    "SELECT updated_at AS updatedAt FROM bookmarks WHERE id = ?",
+    id
+  );
+  if (!current || current.updatedAt !== bookmark.updatedAt) {
+    throw new Error(
+      "The bookmark changed while it was being moved. No source data was deleted; retry the move."
+    );
+  }
   if (
     bookmark.previewImagePath &&
     !tryDeletePreviewImage(bookmark.previewImagePath)
@@ -637,6 +714,15 @@ export async function movePublicBookmarkToVaultSafe(
   }
   await main.execAsync("PRAGMA secure_delete = ON;");
   await main.withTransactionAsync(async () => {
+    const current = await main.getFirstAsync<{ updatedAt: number }>(
+      "SELECT updated_at AS updatedAt FROM bookmarks WHERE id = ?",
+      id
+    );
+    if (!current || current.updatedAt !== bookmark.updatedAt) {
+      throw new Error(
+        "The bookmark changed while it was being moved. The source bookmark was preserved."
+      );
+    }
     await main.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
     await main.runAsync(
       "DELETE FROM app_settings WHERE key IN (?, ?)",

@@ -100,7 +100,7 @@ export function resolvePreviewImageUri(relativePath: string): string | null {
     return cached;
   }
   if (path.startsWith("data:")) {
-    return rememberResolvedUri(path, path);
+    return path;
   }
   if (isSafeRemoteHttpUrl(path)) {
     return rememberResolvedUri(path, path);
@@ -222,6 +222,7 @@ export function tryDeletePreviewImage(relativePath: string | null): boolean {
     return true;
   }
 
+  resolvedUriCache.delete(relativePath);
   try {
     const file = new File(Paths.document, relativePath);
     if (file.exists) {
