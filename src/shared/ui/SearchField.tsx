@@ -4,6 +4,7 @@ import type { TextFieldRef } from "@expo/ui/jetpack-compose";
 
 import { TextField } from "@/shared/ui/TextField";
 import { styles } from "@/styles/shared/ui/SearchField.styles";
+import { useTheme } from "@/theme";
 
 type SearchFieldProps = {
   value: string;
@@ -22,6 +23,7 @@ export function SearchField({
   placeholder = "Search your library",
   autoFocus = false,
 }: SearchFieldProps) {
+  const { theme } = useTheme();
   const fieldRef = useRef<TextFieldRef>(null);
 
   useEffect(() => {
@@ -47,6 +49,9 @@ export function SearchField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
+          shapeRadius={999}
+          containerColor={theme.colors.surfaceContainerLow}
+          indicatorColor={theme.colors.outlineVariant}
         />
       </View>
     </View>
