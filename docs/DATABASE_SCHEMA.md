@@ -20,11 +20,20 @@ This document defines the local data model for Paperclip. The goal is a small, u
 
 SQLite is the source of truth for bookmark and folder records. Preview images and other binary assets are stored in app-managed files; the database stores their local paths and metadata.
 
-The schema is intentionally limited to three application tables for the MVP:
+The schema has three core user-data tables:
 
 1. `folders`
 2. `bookmarks`
 3. `app_settings`
+
+Two supporting tables are also present:
+
+4. `article_contents` — cached public/private article blocks and reading cache metadata.
+5. `vault_transfers` — crash-recovery markers for public/private transfers.
+
+A separate encrypted vault database (`paperclip-private.db`) mirrors the folder,
+bookmark, article, annotation, and settings tables for private content. Its
+schema version is managed by `PRAGMA user_version` on that database.
 
 A virtual search index may be added using SQLite FTS5 after runtime support is verified. Schema migration history should be managed by the database migration mechanism rather than duplicated in a custom application table unless the chosen migration tool requires one.
 

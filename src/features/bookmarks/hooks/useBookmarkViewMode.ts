@@ -7,6 +7,13 @@ const VIEW_MODE_SETTING_KEY = "bookmark_view";
 const DEFAULT_VIEW_MODE: BookmarkViewMode = "list";
 
 let cachedViewMode: BookmarkViewMode | null = null;
+const viewModeListeners = new Set<(mode: BookmarkViewMode) => void>();
+
+function broadcastViewMode(mode: BookmarkViewMode) {
+  for (const listener of viewModeListeners) {
+    listener(mode);
+  }
+}
 
 function isBookmarkViewMode(value: unknown): value is BookmarkViewMode {
   return value === "grid" || value === "list" || value === "cards";
@@ -34,6 +41,7 @@ export function useBookmarkViewMode() {
         if (!cancelled && isBookmarkViewMode(stored)) {
           cachedViewMode = stored;
           setViewModeState(stored);
+          broadcastViewMode(stored);
         }
       })
       .catch(() => {
@@ -45,9 +53,17 @@ export function useBookmarkViewMode() {
     };
   }, []);
 
+  useEffect(() => {
+    viewModeListeners.add(setViewModeState);
+    return () => {
+      viewModeListeners.delete(setViewModeState);
+    };
+  }, []);
+
   const setViewMode = useCallback((next: BookmarkViewMode) => {
     cachedViewMode = next;
     setViewModeState(next);
+    broadcastViewMode(next);
     void setSetting(VIEW_MODE_SETTING_KEY, next).catch(() => {
       console.warn("Could not persist the bookmark view preference.");
     });
