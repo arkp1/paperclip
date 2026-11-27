@@ -14,6 +14,7 @@ import {
 } from "@/features/bookmarks/data/bookmarkRepository";
 import type { PreviewStatus } from "@/features/bookmarks/types";
 import { emitBookmarkChanged } from "@/features/bookmarks/services/bookmarkEvents";
+import { runWithConcurrency } from "@/shared/utils/runWithConcurrency";
 import { fetchLinkMetadata } from "@/features/save-link/services/metadataService";
 import {
   downloadPreviewImage,
@@ -22,6 +23,7 @@ import {
 } from "@/core/files/previewFileStore";
 
 const PREVIEW_RETRY_COOLDOWN_MS = 10 * 60 * 1000;
+const PREVIEW_REFRESH_CONCURRENCY = 3;
 
 /**
  * Caches the preview image for a freshly saved bookmark. The row already
@@ -188,11 +190,15 @@ export async function refreshMissingPreviews(limit = 30): Promise<void> {
     limit
   );
 
-  for (const row of rows) {
-    await refreshBookmarkPreview(row.id).catch(async () => {
-      await markBookmarkPreviewFailed(row.id).catch(() => {
-        // Continue with the remaining previews even if the marker fails.
+  await runWithConcurrency(
+    rows,
+    PREVIEW_REFRESH_CONCURRENCY,
+    async (row) => {
+      await refreshBookmarkPreview(row.id).catch(async () => {
+        await markBookmarkPreviewFailed(row.id).catch(() => {
+          // Continue with the remaining previews even if the marker fails.
+        });
       });
-    });
-  }
+    }
+  );
 }

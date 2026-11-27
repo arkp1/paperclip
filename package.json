@@ -54,6 +54,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/folder-validation.test.mjs tests/run-with-concurrency.test.mjs tests/private-vault-regression.test.mjs",
     "test:vault": "node --test tests/private-vault-regression.test.mjs",
     "lint": "expo lint"
   },

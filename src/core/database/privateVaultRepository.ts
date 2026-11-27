@@ -90,6 +90,12 @@ function mapFolder(row: FolderRow): Folder {
   };
 }
 
+function assertCurrentVaultGeneration(generation: number): void {
+  if (!isPrivateVaultGenerationCurrent(generation)) {
+    throw new Error("The private session ended before the change was saved.");
+  }
+}
+
 function mapBookmark(row: BookmarkRow): Bookmark {
   return {
     id: row.id,
@@ -174,9 +180,7 @@ export async function createVaultFolder(
 ): Promise<Folder> {
   const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
-  if (!isPrivateVaultGenerationCurrent(generation)) {
-    throw new Error("The private session ended before the folder was created.");
-  }
+  assertCurrentVaultGeneration(generation);
   const now = Date.now();
   const id = createId();
   try {
@@ -199,6 +203,7 @@ export async function createVaultFolder(
     }
     throw error;
   }
+  assertCurrentVaultGeneration(generation);
   const created = await getVaultFolderById(id);
   if (!created) {
     throw new InvalidFolderNameError("The folder could not be read back.");
@@ -210,7 +215,9 @@ export async function updateVaultFolderName(
   id: string,
   name: string
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   try {
     const result = await database.runAsync(
       "UPDATE folders SET name = ?, updated_at = ? WHERE id = ?",
@@ -227,13 +234,16 @@ export async function updateVaultFolderName(
     }
     throw error;
   }
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function updateVaultFolderColor(
   id: string,
   colorKey: FolderColorKey | null
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   const result = await database.runAsync(
     "UPDATE folders SET color_key = ?, updated_at = ? WHERE id = ?",
     colorKey,
@@ -243,19 +253,23 @@ export async function updateVaultFolderColor(
   if (result.changes === 0) {
     throw new FolderNotFoundError();
   }
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function markVaultFolderOpened(
   id: string,
   openedAt: number
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   await database.runAsync(
     "UPDATE folders SET last_opened_at = ?, updated_at = ? WHERE id = ?",
     openedAt,
     Date.now(),
     id
   );
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function deleteVaultFolder(
@@ -341,7 +355,9 @@ export async function updateVaultBookmarkFavorite(
   id: string,
   favorite: boolean
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   const result = await database.runAsync(
     "UPDATE bookmarks SET is_favorite = ?, updated_at = ? WHERE id = ?",
     favorite ? 1 : 0,
@@ -351,6 +367,7 @@ export async function updateVaultBookmarkFavorite(
   if (result.changes === 0) {
     throw new Error("Private bookmark not found.");
   }
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function updateVaultBookmarkContent(
@@ -360,7 +377,9 @@ export async function updateVaultBookmarkContent(
     note: string | null;
   }
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   const result = await database.runAsync(
     "UPDATE bookmarks SET title = ?, note = ?, title_is_user_edited = 1, updated_at = ? WHERE id = ?",
     input.title,
@@ -371,10 +390,13 @@ export async function updateVaultBookmarkContent(
   if (result.changes === 0) {
     throw new Error("Private bookmark not found.");
   }
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function deleteVaultBookmark(id: string): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   await database.withTransactionAsync(async () => {
     await database.runAsync(
       "DELETE FROM app_settings WHERE key IN (?, ?)",
@@ -383,13 +405,16 @@ export async function deleteVaultBookmark(id: string): Promise<void> {
     );
     await database.runAsync("DELETE FROM bookmarks WHERE id = ?", id);
   });
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function moveVaultBookmark(
   id: string,
   folderId: string | null
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   if (folderId) {
     const folder = await database.getFirstAsync<{ id: string }>(
       "SELECT id FROM folders WHERE id = ?",
@@ -408,6 +433,7 @@ export async function moveVaultBookmark(
   if (result.changes === 0) {
     throw new Error("Private bookmark not found.");
   }
+  assertCurrentVaultGeneration(generation);
 }
 
 export async function isVaultBookmark(id: string): Promise<boolean> {
@@ -582,7 +608,9 @@ export async function saveVaultArticle(
   fetchedAt: number,
   cacheVersion: number
 ): Promise<void> {
+  const generation = getPrivateVaultGeneration();
   const database = await getPrivateVault();
+  assertCurrentVaultGeneration(generation);
   await database.runAsync(
     `INSERT INTO article_contents
      (bookmark_id, blocks, word_count, fetched_at, cache_version)
@@ -598,6 +626,7 @@ export async function saveVaultArticle(
     fetchedAt,
     cacheVersion
   );
+  assertCurrentVaultGeneration(generation);
 }
 
 /**
