@@ -221,6 +221,9 @@ export function SaveLinkScreen({
       emitBookmarkChanged(saved.id);
       haptics.success();
       ToastAndroid.show("Link saved", ToastAndroid.SHORT);
+      void import("@/features/widgets/widgetUpdater")
+        .then((module) => module.refreshPaperclipWidgets())
+        .catch(() => undefined);
 
       if (onSaved) {
         onSaved(folderId);

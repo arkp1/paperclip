@@ -62,6 +62,9 @@ async function performQuickSave(rawUrl: string): Promise<QuickSaveResult> {
     });
     void cacheArticleInBackground(saved.id);
     emitBookmarkChanged(saved.id);
+    void import("@/features/widgets/widgetUpdater")
+      .then((module) => module.refreshPaperclipWidgets())
+      .catch(() => undefined);
 
     return { status: "saved", bookmarkId: saved.id };
   } catch (error) {

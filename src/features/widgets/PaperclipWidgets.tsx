@@ -2,12 +2,11 @@
 
 import {
   FlexWidget,
-  ImageWidget,
   ListWidget,
   TextWidget,
 } from "react-native-android-widget";
 
-import type { WidgetBookmark, WidgetData } from "@/features/widgets/widgetData";
+import type { WidgetData } from "@/features/widgets/widgetData";
 
 type WidgetTheme = "light" | "dark";
 
@@ -49,41 +48,6 @@ function EmptyState({ theme }: { theme: WidgetTheme }) {
   );
 }
 
-function BookmarkRow({
-  bookmark,
-  theme,
-  compact = false,
-}: {
-  bookmark: WidgetBookmark;
-  theme: WidgetTheme;
-  compact?: boolean;
-}) {
-  const colors = palette[theme];
-  return (
-    <FlexWidget
-      clickAction="OPEN_URI"
-      clickActionData={{ uri: openUri(bookmark.id) }}
-      style={{
-        width: "match_parent",
-        flexDirection: "column",
-        paddingVertical: compact ? 7 : 8,
-        paddingHorizontal: 2,
-      }}
-    >
-      <TextWidget
-        text={bookmark.title}
-        maxLines={1}
-        style={{ fontSize: 13, color: colors.text }}
-      />
-      <TextWidget
-        text={bookmark.source}
-        maxLines={1}
-        style={{ fontSize: 11, color: colors.muted }}
-      />
-    </FlexWidget>
-  );
-}
-
 export function PaperclipSmallWidget({
   data,
   theme,
@@ -115,7 +79,8 @@ export function PaperclipSmallWidget({
         />
       </FlexWidget>
       <FlexWidget
-        clickAction="ADD_FROM_CLIPBOARD"
+        clickAction="OPEN_URI"
+        clickActionData={{ uri: "paperclip://clipboard-save" }}
         style={{
           backgroundColor: colors.primary,
           borderRadius: 18,
@@ -159,16 +124,39 @@ export function PaperclipMediumWidget({
       {data.bookmarks.length === 0 ? (
         <EmptyState theme={theme} />
       ) : (
-        data.bookmarks
-          .slice(0, 3)
-          .map((bookmark) => (
-            <BookmarkRow
+        <ListWidget
+          style={{
+            width: "match_parent",
+            height: "match_parent",
+            backgroundColor: colors.background,
+          }}
+        >
+          {data.bookmarks.slice(0, 8).map((bookmark) => (
+            <FlexWidget
               key={bookmark.id}
-              bookmark={bookmark}
-              theme={theme}
-              compact
-            />
-          ))
+              clickAction="OPEN_URI"
+              clickActionData={{ uri: openUri(bookmark.id) }}
+              style={{
+                width: "match_parent",
+                height: 42,
+                flexDirection: "column",
+                justifyContent: "center",
+                paddingHorizontal: 2,
+              }}
+            >
+              <TextWidget
+                text={bookmark.title}
+                maxLines={1}
+                style={{ fontSize: 13, color: colors.text }}
+              />
+              <TextWidget
+                text={bookmark.source}
+                maxLines={1}
+                style={{ fontSize: 11, color: colors.muted }}
+              />
+            </FlexWidget>
+          ))}
+        </ListWidget>
       )}
     </FlexWidget>
   );
@@ -231,20 +219,10 @@ export function PaperclipLargeWidget({
                   marginRight: 10,
                 }}
               >
-                {bookmark.thumbnail ? (
-                  <ImageWidget
-                    image={bookmark.thumbnail}
-                    imageWidth={34}
-                    imageHeight={34}
-                    radius={10}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <TextWidget
-                    text={bookmark.title.slice(0, 1).toUpperCase()}
-                    style={{ fontSize: 15, color: colors.primary }}
-                  />
-                )}
+                <TextWidget
+                  text={bookmark.title.slice(0, 1).toUpperCase()}
+                  style={{ fontSize: 15, color: colors.primary }}
+                />
               </FlexWidget>
               <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
                 <TextWidget

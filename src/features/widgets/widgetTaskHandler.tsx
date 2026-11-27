@@ -1,16 +1,11 @@
-import * as Clipboard from "expo-clipboard";
 import type { WidgetTaskHandlerProps } from "react-native-android-widget";
 
-import { quickSaveLink } from "@/features/save-link/services/quickSaveService";
-import { extractSharedUrl } from "@/features/save-link/utils/sharePayload";
 import {
   PaperclipLargeWidget,
   PaperclipMediumWidget,
   PaperclipSmallWidget,
 } from "@/features/widgets/PaperclipWidgets";
-import { refreshPaperclipWidgets } from "@/features/widgets/widgetUpdater";
 import { loadWidgetData } from "@/features/widgets/widgetData";
-import { validateHttpUrl } from "@/shared/utils/url";
 
 function renderForWidget(
   widgetName: string,
@@ -37,21 +32,9 @@ function renderForWidget(
 }
 
 export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
-  const { widgetInfo, widgetAction, clickAction } = props;
+  const { widgetInfo, widgetAction } = props;
 
-  if (widgetAction === "WIDGET_CLICK") {
-    if (clickAction === "ADD_FROM_CLIPBOARD") {
-      const shared = await Clipboard.getStringAsync();
-      const url = extractSharedUrl(shared);
-      if (validateHttpUrl(url).valid) {
-        await quickSaveLink(url);
-        await refreshPaperclipWidgets();
-      }
-    }
-    return;
-  }
-
-  if (widgetAction === "WIDGET_DELETED") {
+  if (widgetAction === "WIDGET_DELETED" || widgetAction === "WIDGET_CLICK") {
     return;
   }
 

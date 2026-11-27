@@ -13,7 +13,33 @@ const widgetNames = [
   "PaperclipLarge",
 ] as const;
 
+let refreshPromise: Promise<void> | null = null;
+let lastRefreshAt = 0;
+let pendingRefresh = false;
+
 export async function refreshPaperclipWidgets(): Promise<void> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  if (Date.now() - lastRefreshAt < 750) {
+    pendingRefresh = true;
+    setTimeout(() => {
+      if (pendingRefresh) {
+        pendingRefresh = false;
+        void refreshPaperclipWidgets();
+      }
+    }, 760);
+    return;
+  }
+  pendingRefresh = false;
+  lastRefreshAt = Date.now();
+  refreshPromise = performRefresh().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
+async function performRefresh(): Promise<void> {
   const data = await loadWidgetData();
   await Promise.all(
     widgetNames.map((widgetName) =>
