@@ -2,6 +2,7 @@ import {
   createBookmark,
   findBookmarkByUrl,
 } from "@/features/bookmarks/data/bookmarkRepository";
+import { emitBookmarkChanged } from "@/features/bookmarks/services/bookmarkEvents";
 import { refreshBookmarkPreview } from "@/features/bookmarks/services/previewService";
 import { cacheArticleInBackground } from "@/features/reader/services/articleService";
 import { validateHttpUrl } from "@/shared/utils/url";
@@ -16,7 +17,22 @@ export type QuickSaveResult =
  * Saves a shared link immediately without opening the form. Metadata and the
  * preview are refreshed in the background after the row exists.
  */
-export async function quickSaveLink(rawUrl: string): Promise<QuickSaveResult> {
+const inFlightSaves = new Map<string, Promise<QuickSaveResult>>();
+
+export function quickSaveLink(rawUrl: string): Promise<QuickSaveResult> {
+  const key = rawUrl.trim();
+  const existing = inFlightSaves.get(key);
+  if (existing) {
+    return existing;
+  }
+  const operation = performQuickSave(rawUrl).finally(() => {
+    inFlightSaves.delete(key);
+  });
+  inFlightSaves.set(key, operation);
+  return operation;
+}
+
+async function performQuickSave(rawUrl: string): Promise<QuickSaveResult> {
   const validation = validateHttpUrl(rawUrl);
   if (!validation.valid) {
     return { status: "invalid" };
@@ -45,6 +61,7 @@ export async function quickSaveLink(rawUrl: string): Promise<QuickSaveResult> {
       // The link is saved even if enrichment fails.
     });
     void cacheArticleInBackground(saved.id);
+    emitBookmarkChanged(saved.id);
 
     return { status: "saved", bookmarkId: saved.id };
   } catch (error) {
