@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 
 import { subscribeBookmarkChanges } from "@/features/bookmarks/services/bookmarkEvents";
-import { refreshPaperclipWidgets } from "@/features/widgets/widgetUpdater";
 
 /**
  * Mirrors saved-library changes to the home-screen widgets. Widgets are a
@@ -18,7 +17,9 @@ export function WidgetRefreshBridge() {
       }
       timer.current = setTimeout(() => {
         timer.current = null;
-        void refreshPaperclipWidgets();
+        void import("@/features/widgets/widgetUpdater")
+          .then((module) => module.refreshPaperclipWidgets())
+          .catch(() => undefined);
       }, 500);
     };
 
