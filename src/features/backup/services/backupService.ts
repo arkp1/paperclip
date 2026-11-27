@@ -7,6 +7,7 @@ import {
   PUBLIC_FOLDER_TRANSFER_FILTER,
 } from "@/core/database/vaultTransferState";
 import { refreshBookmarkPreview } from "@/features/bookmarks/services/previewService";
+import { tryDeletePreviewImage } from "@/core/files/previewFileStore";
 import { validateFolderName } from "@/features/folders/validation";
 import { validateHttpUrl } from "@/shared/utils/url";
 
@@ -41,6 +42,12 @@ const BACKUP_FORMAT = "paperclip-backup";
 const BACKUP_VERSION = 1;
 const MAX_BACKUP_CHARACTERS = 50_000_000;
 const MAX_IMAGE_BASE64_CHARACTERS = 12_000_000;
+const MAX_TOTAL_IMAGE_BYTES = 25_000_000;
+const PREVIEW_DIRECTORY_SEGMENTS = [
+  "paperclip",
+  "previews",
+  "public",
+] as const;
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "avif"]);
 const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
 
@@ -201,8 +208,68 @@ export async function applyBackup(
   );
   const validFolderIds = new Set<string>();
   const needsPreviewRefresh: string[] = [];
+  const imagesByBookmark = new Map<string, BackupImage>();
+  for (const image of document.images) {
+    if (!imagesByBookmark.has(image.bookmarkId)) {
+      imagesByBookmark.set(image.bookmarkId, image);
+    }
+  }
 
-  await database.withTransactionAsync(async () => {
+  // Stage image files before the DB transaction. On rollback, all staged files
+  // are removed so the filesystem cannot be left with unreferenced previews.
+  const preparedPreviewPaths = new Map<string, string | null>();
+  const writtenPreviewPaths = new Set<string>();
+  const preparedBookmarkIds = new Set<string>();
+  let totalImageBytes = 0;
+
+  for (const bookmark of document.bookmarks) {
+    const id = readId(bookmark.id);
+    const originalUrl = readString(bookmark.originalUrl);
+    const title = readString(bookmark.title);
+    if (
+      !id ||
+      !originalUrl ||
+      !title ||
+      !validateHttpUrl(originalUrl).valid ||
+      existingBookmarkIds.has(id) ||
+      preparedBookmarkIds.has(id)
+    ) {
+      continue;
+    }
+    preparedBookmarkIds.add(id);
+
+    const image = imagesByBookmark.get(id);
+    const imageExtension = image?.extension.toLowerCase() ?? null;
+    if (!image || !imageExtension || !IMAGE_EXTENSIONS.has(imageExtension)) {
+      preparedPreviewPaths.set(id, null);
+      continue;
+    }
+
+    try {
+      const bytes = decodeBase64(image.base64);
+      if (!matchesImageSignature(bytes, imageExtension)) {
+        throw new Error("Preview image content does not match its extension.");
+      }
+      if (totalImageBytes + bytes.byteLength > MAX_TOTAL_IMAGE_BYTES) {
+        preparedPreviewPaths.set(id, null);
+        continue;
+      }
+      const previewPath = await writeImportedPreviewImage(
+        id,
+        imageExtension,
+        bytes
+      );
+      totalImageBytes += bytes.byteLength;
+      writtenPreviewPaths.add(previewPath);
+      preparedPreviewPaths.set(id, previewPath);
+    } catch {
+      preparedPreviewPaths.set(id, null);
+    }
+  }
+
+  let committed = false;
+  try {
+    await database.withTransactionAsync(async () => {
     for (const folder of document.folders) {
       const id = readId(folder.id);
       const rawName = readString(folder.name);
@@ -256,41 +323,9 @@ export async function applyBackup(
         folderId && (validFolderIds.has(folderId) || existingFolderIds.has(folderId))
           ? folderId
           : null;
+      const previewImagePath = preparedPreviewPaths.get(id) ?? null;
 
-      const image = document.images.find((entry) => entry.bookmarkId === id);
-      const imageExtension = image?.extension.toLowerCase() ?? null;
-      let previewImagePath: string | null = null;
-      if (image && imageExtension && IMAGE_EXTENSIONS.has(imageExtension)) {
-        try {
-          const bytes = decodeBase64(image.base64);
-          if (!matchesImageSignature(bytes, imageExtension)) {
-            throw new Error("Preview image content does not match its extension.");
-          }
-
-          const directory = new Directory(
-            Paths.document,
-            "paperclip",
-            "previews",
-            "public"
-          );
-          directory.create({ intermediates: true, idempotent: true });
-          const file = new File(directory, `${id}.${imageExtension}`);
-          if (file.exists) {
-            file.delete();
-          }
-          file.create({ intermediates: true });
-          await file.write(bytes);
-          if (!file.exists || file.size === 0) {
-            throw new Error("Preview image was not written.");
-          }
-          previewImagePath = `paperclip/previews/public/${id}.${imageExtension}`;
-          inserted.images += 1;
-        } catch {
-          previewImagePath = null;
-        }
-      }
-
-      await database.runAsync(
+      const result = await database.runAsync(
         `INSERT OR IGNORE INTO bookmarks
           (id, original_url, canonical_url, title, title_is_user_edited,
            description, note, folder_id, source_name, domain,
@@ -317,13 +352,30 @@ export async function applyBackup(
         readNumber(bookmark.createdAt) ?? Date.now(),
         readNumber(bookmark.updatedAt) ?? Date.now()
       );
+      if (result.changes === 0) {
+        if (previewImagePath) {
+          tryDeletePreviewImage(previewImagePath);
+          writtenPreviewPaths.delete(previewImagePath);
+        }
+        continue;
+      }
       existingBookmarkIds.add(id);
       inserted.bookmarks += 1;
-      if (!previewImagePath) {
+      if (previewImagePath) {
+        inserted.images += 1;
+      } else {
         needsPreviewRefresh.push(id);
       }
     }
-  });
+    });
+    committed = true;
+  } finally {
+    if (!committed) {
+      for (const previewPath of writtenPreviewPaths) {
+        tryDeletePreviewImage(previewPath);
+      }
+    }
+  }
 
   for (const bookmarkId of needsPreviewRefresh) {
     void refreshBookmarkPreview(bookmarkId).catch(() => {
@@ -332,6 +384,36 @@ export async function applyBackup(
   }
 
   return inserted;
+}
+
+async function writeImportedPreviewImage(
+  bookmarkId: string,
+  extension: string,
+  bytes: Uint8Array
+): Promise<string> {
+  const directory = new Directory(Paths.document, ...PREVIEW_DIRECTORY_SEGMENTS);
+  directory.create({ intermediates: true, idempotent: true });
+  const filename = `${bookmarkId}-import-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}.${extension}`;
+  const file = new File(directory, filename);
+  try {
+    file.create({ intermediates: true });
+    await file.write(bytes);
+    if (!file.exists || file.size === 0) {
+      throw new Error("Preview image was not written.");
+    }
+    return `${PREVIEW_DIRECTORY_SEGMENTS.join("/")}/${filename}`;
+  } catch (error) {
+    try {
+      if (file.exists) {
+        file.delete();
+      }
+    } catch {
+      // Best-effort cleanup of a partially written import file.
+    }
+    throw error;
+  }
 }
 
 function validateBackup(value: unknown): BackupDocument {
