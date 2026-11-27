@@ -20,6 +20,11 @@ export type WidgetData = {
 };
 
 const EMPTY_DATA: WidgetData = { total: 0, bookmarks: [] };
+let cachedWidgetData: WidgetData | null = null;
+
+export function getCachedWidgetData(): WidgetData | null {
+  return cachedWidgetData;
+}
 
 export async function loadWidgetData(): Promise<WidgetData> {
   try {
@@ -28,7 +33,7 @@ export async function loadWidgetData(): Promise<WidgetData> {
       countPublicBookmarks("all"),
       listPublicBookmarks("all", 8, 0, "recent"),
     ]);
-    return {
+    const data: WidgetData = {
       total,
       bookmarks: await Promise.all(
         recent.map(async (bookmark) => ({
@@ -39,8 +44,10 @@ export async function loadWidgetData(): Promise<WidgetData> {
         }))
       ),
     };
+    cachedWidgetData = data;
+    return data;
   } catch {
-    return EMPTY_DATA;
+    return cachedWidgetData ?? EMPTY_DATA;
   }
 }
 

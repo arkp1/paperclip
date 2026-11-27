@@ -5,7 +5,7 @@ import {
   PaperclipMediumWidget,
   PaperclipSmallWidget,
 } from "@/features/widgets/PaperclipWidgets";
-import { loadWidgetData } from "@/features/widgets/widgetData";
+import { getCachedWidgetData, loadWidgetData } from "@/features/widgets/widgetData";
 
 function renderForWidget(
   widgetName: string,
@@ -38,6 +38,9 @@ export async function widgetTaskHandler(props: WidgetTaskHandlerProps) {
     return;
   }
 
-  const data = await loadWidgetData();
+  const data =
+    widgetAction === "WIDGET_RESIZED"
+      ? getCachedWidgetData() ?? (await loadWidgetData())
+      : await loadWidgetData();
   renderForWidget(widgetInfo.widgetName, data, props.renderWidget);
 }

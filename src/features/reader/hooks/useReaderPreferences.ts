@@ -37,7 +37,7 @@ const DEFAULTS: ReaderPreferences = {
   fontSize: 18,
   lineHeight: 1.72,
   paragraphSpacing: 16,
-  width: "standard",
+  width: "wide",
   align: "left",
   background: "white",
   paginate: false,
