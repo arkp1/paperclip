@@ -107,7 +107,7 @@ export function DeleteFolderDialog({
                   disabled={pendingStrategy !== null}
                 />
                 <AppText variant="bodySmall" color={theme.colors.onSurfaceVariant}>
-                  This permanently deletes the folder's saved links.
+                  This permanently deletes the folder’s saved links.
                 </AppText>
               </View>
             </>

@@ -80,7 +80,7 @@ import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/reader/ReaderScreen.styles";
-import { motion, spacing, useTheme } from "@/theme";
+import { motion, spacing } from "@/theme";
 
 type ReaderScreenProps = {
   bookmarkId: string;
@@ -92,7 +92,6 @@ type ReaderScreenProps = {
  */
 export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const router = useRouter();
-  const { theme } = useTheme();
   const [readerFontsLoaded] = useFonts({
     "NotoSerif-Regular": require("../../../../assets/fonts/NotoSerif-Variable.ttf"),
     "JetBrainsMono-Regular": require("../../../../assets/fonts/JetBrainsMono-Variable.ttf"),

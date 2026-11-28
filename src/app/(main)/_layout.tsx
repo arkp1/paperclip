@@ -1,5 +1,4 @@
-import { Tabs, usePathname } from "expo-router";
-import { useRouter } from "expo-router";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { BackHandler, Easing, View } from "react-native";
 

@@ -14,8 +14,10 @@ import {
 } from "@/core/database/privateVaultRepository";
 import { isPrivateVaultOpen } from "@/core/database/privateVault";
 import { withPrivacyWriteLock } from "@/core/database/privacyWriteLock";
-import { PUBLIC_FOLDER_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
-import { PUBLIC_BOOKMARK_TRANSFER_FILTER } from "@/core/database/vaultTransferState";
+import {
+  PUBLIC_BOOKMARK_TRANSFER_FILTER,
+  PUBLIC_FOLDER_TRANSFER_FILTER,
+} from "@/core/database/vaultTransferState";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
@@ -85,22 +87,6 @@ function mapFolderRow(row: FolderRow): Folder {
     bookmarkCount: row.bookmarkCount,
   };
 }
-
-const PRIVATE_FOLDER_SELECT = `
-SELECT
-  f.id,
-  f.name,
-  f.icon_key AS iconKey,
-  f.color_key AS colorKey,
-  f.is_private AS isPrivate,
-  f.sort_order AS sortOrder,
-  f.last_opened_at AS lastOpenedAt,
-  f.created_at AS createdAt,
-  f.updated_at AS updatedAt,
-  COUNT(b.id) AS bookmarkCount
-FROM folders f
-LEFT JOIN bookmarks b ON b.folder_id = f.id
-`;
 
 export async function getAllFolders(): Promise<Folder[]> {
   const database = await getDatabase();

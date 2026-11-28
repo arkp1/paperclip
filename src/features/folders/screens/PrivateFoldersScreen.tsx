@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, FlatList, View } from "react-native";
+import { Alert, FlatList } from "react-native";
 import { useRouter } from "expo-router";
 
 import {

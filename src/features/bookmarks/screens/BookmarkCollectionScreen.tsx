@@ -29,7 +29,6 @@ import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
-import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/bookmarks/BookmarkCollectionScreen.styles";
 import { spacing } from "@/theme";
 

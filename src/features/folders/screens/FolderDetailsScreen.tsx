@@ -40,7 +40,6 @@ import { IconButton } from "@/shared/ui/IconButton";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
-import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/folders/FolderDetailsScreen.styles";
 
 type FolderDetailsScreenProps = {
