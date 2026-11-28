@@ -75,7 +75,6 @@ export function SettingsScreen() {
           Make Paperclip feel like yours.
         </AppText>
       </View>
-
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: bottomInset }]}
       >
@@ -97,7 +96,7 @@ export function SettingsScreen() {
                 variant="bodySmall"
                 color={theme.colors.onSurfaceVariant}
               >
-                Choose how Paperclip looks.
+                Light, dark, or follow the system.
               </AppText>
             </View>
 
@@ -121,7 +120,7 @@ export function SettingsScreen() {
                 variant="bodySmall"
                 color={theme.colors.onSurfaceVariant}
               >
-                Choose the accent used across Paperclip.
+                Pick an accent colour.
               </AppText>
             </View>
 
@@ -170,7 +169,7 @@ export function SettingsScreen() {
                   variant="bodySmall"
                   color={theme.colors.onSurfaceVariant}
                 >
-                  Use a pure black background whenever the dark theme is active.
+                  Use pure black in dark mode.
                 </AppText>
               </View>
               <MaterialHost matchContents>
@@ -202,8 +201,7 @@ export function SettingsScreen() {
                     variant="bodySmall"
                     color={theme.colors.onSurfaceVariant}
                   >
-                    Native Material controls follow your Android wallpaper. App
-                    surfaces keep the selected accent.
+                    Match native controls to your wallpaper.
                   </AppText>
                 </View>
                 <MaterialHost matchContents>
@@ -229,8 +227,7 @@ export function SettingsScreen() {
                   variant="bodySmall"
                   color={theme.colors.onSurfaceVariant}
                 >
-                  Tint each folder card from its assigned colour. Off keeps the
-                  neutral card surface.
+                  Tint folder cards with their colour.
                 </AppText>
               </View>
               <MaterialHost matchContents>
@@ -264,7 +261,7 @@ export function SettingsScreen() {
                 variant="bodySmall"
                 color={theme.colors.onSurfaceVariant}
               >
-                Private links always open in the protected reader.
+                Private links always use the protected reader.
               </AppText>
             </View>
 
@@ -293,12 +290,12 @@ export function SettingsScreen() {
             <InfoRow
               icon="shield-lock-outline"
               title="Locked folders"
-              description="Lock folders from their menu. Private data is stored in a SQLCipher vault unlocked with biometrics or your device PIN."
+              description="Lock folders from their menu. Private data stays in a secured vault."
             />
             <InfoRow
               icon="lock-outline"
               title="Session lock"
-              description="Unlocked folders lock again when Paperclip leaves the foreground."
+              description="Private folders lock when you leave the app."
             />
           </View>
           <Button
@@ -350,17 +347,20 @@ export function SettingsScreen() {
             <ScalePressable
               onPress={() => router.push("/backup")}
               scaleTo={0.99}
+              accessibilityRole="button"
+              accessibilityLabel="Import and export. Back up or restore your public library."
             >
               <InfoRow
                 icon="database-outline"
-                title="Import &amp; export"
-                description="Export a public backup or merge one into this library."
+                title="Import & export"
+                description="Back up or restore your public library."
+                action
               />
             </ScalePressable>
             <InfoRow
               icon="information-outline"
               title="Local-first storage"
-              description="Folders and links live in this device's SQLite database. Uninstalling the app removes them unless you keep a backup."
+              description="Your library stays on this device."
             />
           </View>
         </View>
@@ -389,9 +389,10 @@ type InfoRowProps = {
   icon: IconName;
   title: string;
   description: string;
+  action?: boolean;
 };
 
-function InfoRow({ icon, title, description }: InfoRowProps) {
+function InfoRow({ icon, title, description, action = false }: InfoRowProps) {
   const { theme } = useTheme();
 
   return (
@@ -403,7 +404,7 @@ function InfoRow({ icon, title, description }: InfoRowProps) {
       <MaterialCommunityIcons
         name={icon}
         size={22}
-        color={theme.colors.onSurfaceVariant}
+        color={action ? theme.colors.primary : theme.colors.onSurfaceVariant}
       />
       <View style={styles.rowCopy}>
         <AppText variant="bodyLarge">{title}</AppText>
@@ -411,6 +412,13 @@ function InfoRow({ icon, title, description }: InfoRowProps) {
           {description}
         </AppText>
       </View>
+      {action ? (
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={22}
+          color={theme.colors.primary}
+        />
+      ) : null}
     </View>
   );
 }
