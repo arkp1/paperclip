@@ -106,17 +106,14 @@ export function OverflowMenu({
       ],
     };
   });
-  const scrimStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, progress.value),
-  }));
 
   if (!rendered) {
     return null;
   }
 
   const top = Math.max(
-    80,
-    Math.min(anchor.y - insets.top + 8, height - insets.bottom - 220)
+    insets.top + 8,
+    Math.min(anchor.y + 8, height - insets.bottom - 220)
   );
   const menuWidth = Math.min(MENU_WIDTH, width - 24);
   const anchorX = anchor.x > 0 ? anchor.x : width - 12;
@@ -128,14 +125,6 @@ export function OverflowMenu({
 
   return (
     <View style={styles.root}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.scrim,
-          { backgroundColor: theme.colors.scrim },
-          scrimStyle,
-        ]}
-      />
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
@@ -151,8 +140,9 @@ export function OverflowMenu({
             right,
             width: menuWidth,
             maxHeight,
-            backgroundColor: theme.colors.surfaceContainerLowest,
-            borderColor: theme.colors.outlineVariant,
+            borderRadius: theme.shapes.menu,
+            backgroundColor: theme.colors.popup,
+            borderColor: theme.colors.popupBorder,
           },
           surfaceStyle,
         ]}

@@ -29,6 +29,13 @@ export type ColorScheme = {
   success: string;
   warning: string;
   scrim: string;
+  popup: string;
+  popupBorder: string;
+  popupMuted: string;
+  inverseSurface: string;
+  inverseOnSurface: string;
+  inversePrimary: string;
+  scrimSheet: string;
 };
 
 export const lightColors: ColorScheme = {
@@ -62,6 +69,13 @@ export const lightColors: ColorScheme = {
   success: "#356B4A",
   warning: "#805600",
   scrim: "rgba(24, 21, 31, 0.44)",
+  popup: "#FFFEFA",
+  popupBorder: "#CFC8BE",
+  popupMuted: "#665F6C",
+  inverseSurface: "#282431",
+  inverseOnSurface: "#FFFEFA",
+  inversePrimary: "#E9E2FA",
+  scrimSheet: "transparent",
 };
 
 export const darkColors: ColorScheme = {  background: "#252331",
@@ -94,6 +108,13 @@ export const darkColors: ColorScheme = {  background: "#252331",
   success: "#A9D5B5",
   warning: "#F1C66D",
   scrim: "rgba(0, 0, 0, 0.55)",
+  popup: "#3A3548",
+  popupBorder: "#5A5470",
+  popupMuted: "#B9B3C4",
+  inverseSurface: "#F4F0FA",
+  inverseOnSurface: "#282431",
+  inversePrimary: "#49378D",
+  scrimSheet: "transparent",
 };
 
 export const amoledColors: ColorScheme = {
@@ -110,6 +131,13 @@ export const amoledColors: ColorScheme = {
   outline: "#6F6975",
   outlineVariant: "#3A3A3A",
   scrim: "rgba(0, 0, 0, 0.7)",
+  popup: "#1A1A1A",
+  popupBorder: "#3A3A3A",
+  popupMuted: "#B9B3C4",
+  inverseSurface: "#F4F0FA",
+  inverseOnSurface: "#282431",
+  inversePrimary: "#49378D",
+  scrimSheet: "transparent",
 };
 
 export const brandColors = {

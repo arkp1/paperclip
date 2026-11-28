@@ -35,13 +35,15 @@ export function FolderActionsDialog({
       <ActionRow
         icon={folder?.isPrivate ? "lock-open-outline" : "lock-outline"}
         label={folder?.isPrivate ? "Remove from private" : "Make private"}
+        role="menuitem"
         onPress={onTogglePrivacy}
       />
-      <ActionRow icon="pencil-outline" label="Edit name & color" onPress={onRename} />
+      <ActionRow icon="pencil-outline" label="Edit name & color" role="menuitem" onPress={onRename} />
       <ActionRow
         icon="delete-outline"
         label="Delete folder"
         destructive
+        role="menuitem"
         onPress={onDelete}
       />
     </OverflowMenu>

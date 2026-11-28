@@ -56,7 +56,7 @@ export function ReaderActionMenu({
         label={completed ? "Mark as unread" : "Mark as finished"}
         onPress={() => run(onToggleCompleted)}
       />
-      <ActionRow icon="folder-move-outline" label="Move to folder" onPress={() => run(onMove)} />
+      <ActionRow icon="folder-move-outline" label="Move to folder" trailing="chevron" onPress={() => run(onMove)} />
       <ActionRow icon="open-in-new" label="Open in browser" onPress={() => run(onOpenBrowser)} />
       <ActionRow icon="share-variant" label="Share" onPress={() => run(onShare)} />
       <ActionRow icon="delete-outline" label="Delete" destructive onPress={() => run(onDelete)} />

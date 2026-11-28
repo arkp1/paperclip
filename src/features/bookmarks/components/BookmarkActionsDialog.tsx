@@ -220,6 +220,7 @@ export function BookmarkActionsDialog({
                   <ActionRow
                     icon="information-outline"
                     label="View details"
+                    trailing="chevron"
                     onPress={() => {
                       closeAll();
                       router.push({
@@ -246,6 +247,7 @@ export function BookmarkActionsDialog({
                 <ActionRow
                   icon="folder-move-outline"
                   label="Move to folder"
+                  trailing="chevron"
                   onPress={() => {
                     void openMove();
                   }}

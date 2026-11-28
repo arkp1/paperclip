@@ -5,7 +5,11 @@ export const shapes = {
   medium: 12,
   large: 16,
   extraLarge: 20,
-  dialog: 24,
+  menu: 16,
+  menuItem: 12,
+  sheet: 28,
+  snackbar: 16,
+  dialog: 28,
   full: 999,
 } as const;
 

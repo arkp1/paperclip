@@ -143,7 +143,8 @@ export function AppDialog({
               style={[
                 styles.card,
                 {
-                  backgroundColor: colors.surfaceContainerLowest,
+                  backgroundColor: colors.popup,
+                  borderColor: colors.popupBorder,
                   borderRadius: shapes.dialog,
                 },
                 cardStyle,
@@ -156,7 +157,7 @@ export function AppDialog({
                   {description ? (
                     <AppText
                       variant="bodyMedium"
-                      color={colors.onSurfaceVariant}
+                      color={colors.popupMuted}
                     >
                       {description}
                     </AppText>

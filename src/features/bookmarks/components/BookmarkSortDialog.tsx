@@ -3,13 +3,15 @@ import { ActionRow } from "@/shared/ui/ActionRow";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { OverflowMenu } from "@/shared/ui/OverflowMenu";
 
+import type { IconName } from "@/shared/ui/icons";
+
 const SORT_OPTIONS: {
-  icon: "clock-outline" | "sort-alphabetical-ascending";
+  icon: IconName;
   label: string;
   mode: BookmarkSortMode;
 }[] = [
-  { mode: "recent", icon: "clock-outline", label: "Newest first" },
-  { mode: "oldest", icon: "clock-outline", label: "Oldest first" },
+  { mode: "recent", icon: "sort-clock-descending-outline", label: "Newest first" },
+  { mode: "oldest", icon: "sort-clock-ascending-outline", label: "Oldest first" },
   { mode: "title", icon: "sort-alphabetical-ascending", label: "Title A–Z" },
 ];
 
@@ -43,6 +45,7 @@ export function BookmarkSortDialog({
           key={option.mode}
           icon={option.icon}
           label={option.label}
+          role="menuitem"
           selected={sortMode === option.mode}
           onPress={() => {
             onChange(option.mode);

@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 
-import { spacing } from "@/theme";
+import { shapes, spacing } from "@/theme";
 
 export const styles = StyleSheet.create({
   row: {
@@ -8,12 +8,13 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing[3],
     minHeight: 48,
-    paddingHorizontal: spacing[2],
+    paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
-    borderRadius: 12,
+    borderRadius: shapes.menuItem,
   },
-  label: {
+  copy: {
     flex: 1,
+    gap: 2,
   },
   disabled: {
     opacity: 0.6,
