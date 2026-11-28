@@ -10,6 +10,7 @@ import { BookmarkActionsDialog } from "@/features/bookmarks/components/BookmarkA
 import { useBookmarkDetails } from "@/features/bookmarks/hooks/useBookmarkDetails";
 import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider";
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
+import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { navigateBack } from "@/shared/navigation/navigateBack";
 import { haptics } from "@/shared/utils/haptics";
 import { AppText } from "@/shared/ui/AppText";
@@ -20,7 +21,6 @@ import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { MaterialCommunityIcons } from "@/shared/ui/icons";
-import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/bookmarks/BookmarkDetailsScreen.styles";
 import { useTheme } from "@/theme";
 
@@ -166,9 +166,9 @@ export function BookmarkDetailsScreen({
 
             <View style={styles.actions}>
               <Button
-                label="Open link"
+                label="Open"
                 onPress={() => {
-                  void openExternalUrl(bookmark.originalUrl);
+                  void openBookmarkDestination(bookmark, router);
                 }}
               />
               <Button

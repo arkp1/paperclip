@@ -34,6 +34,49 @@
         }
       ],
       [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "PaperclipSmall",
+              "label": "Paperclip saved count",
+              "description": "Saved link count and clipboard shortcut",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "PaperclipMedium",
+              "label": "Paperclip recent links",
+              "description": "Your three most recent saved links",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "720dp",
+              "maxResizeHeight": "360dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "PaperclipLarge",
+              "label": "Paperclip recent library",
+              "description": "Scrollable recent saved links",
+              "minWidth": "250dp",
+              "minHeight": "250dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 4,
+              "maxResizeWidth": "720dp",
+              "maxResizeHeight": "720dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",

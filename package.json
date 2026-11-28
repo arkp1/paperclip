@@ -1,7 +1,7 @@
 {
   "name": "paperclip",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "dependencies": {
     "@expo/ui": "~58.0.26",
     "@expo/vector-icons": "^15.1.1",
@@ -16,6 +16,7 @@
     "expo-glass-effect": "~58.0.5",
     "expo-haptics": "~58.0.8",
     "expo-image": "~58.0.18",
+    "expo-image-manipulator": "~58.0.16",
     "expo-linking": "~58.0.15",
     "expo-local-authentication": "~58.0.2",
     "expo-router": "~58.0.29",
@@ -33,6 +34,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-android-widget": "^0.26.0",
     "react-native-css": "3.1.0-rc.0",
     "react-native-gesture-handler": "~3.3.0",
     "react-native-reanimated": "4.7.1",
@@ -44,19 +46,23 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.12",
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "lightningcss": "1.30.1",
+    "patch-package": "^8.0.1",
     "postcss": "8.5.32",
     "tailwindcss": "4.1.12",
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/safe-network.test.mjs tests/folder-validation.test.mjs tests/run-with-concurrency.test.mjs tests/reader-pagination.test.mjs tests/safe-log.test.mjs tests/private-vault-regression.test.mjs",
+    "test": "node --test tests/safe-network.test.mjs tests/folder-validation.test.mjs tests/run-with-concurrency.test.mjs tests/reader-pagination.test.mjs tests/safe-log.test.mjs tests/share-payload.test.mjs tests/private-vault-regression.test.mjs",
     "test:vault": "node --test tests/private-vault-regression.test.mjs",
     "lint": "expo lint"
   },

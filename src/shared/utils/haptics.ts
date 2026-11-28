@@ -1,9 +1,16 @@
 import * as Haptics from "expo-haptics";
 
 function run(action: () => Promise<void>): void {
-  void action().catch(() => {
-    // Haptic feedback is optional and must never block the interaction.
-  });
+  try {
+    const result = action();
+    void result.catch(() => {
+      // Haptics are optional; absence of a native module or hardware must not
+      // interrupt saving or any other user action.
+    });
+  } catch {
+    // Native haptics can throw synchronously when the installed development
+    // client predates the haptics module. Keep the interaction functional.
+  }
 }
 
 export const haptics = {

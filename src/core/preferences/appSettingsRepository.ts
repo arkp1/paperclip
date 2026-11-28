@@ -18,6 +18,7 @@ export type AppSettingKey =
   | "reader_paginate"
   | "reader_open_links"
   | "reader_browser_domains"
+  | "share_retry_queue"
   | `reader_progress:${string}`
   | `reader_annotations:${string}`;
 

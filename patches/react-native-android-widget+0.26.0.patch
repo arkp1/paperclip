@@ -1,0 +1,16 @@
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+index a68fef1..adf8c36 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidget.java
+@@ -149,8 +149,9 @@ public class RNWidget {
+ 
+     private Uri saveBitmapToDisk(int widgetId, String mode, Bitmap bitmap) {
+         String imagePrefix = "widget_" + widgetId + "_mode_" + mode;
+-        // Previously the fixed filename was overwritten on every render.
+-        RNWidgetImageProvider.deleteMainImage(appContext, widgetId, mode);
++        // Keep the previous bitmap alive until updateAppWidget swaps the
++        // RemoteViews. Deleting it first makes the launcher briefly load a
++        // missing content URI during resize/re-render.
+         String fileName = RNWidgetImageProvider.writeImage(appContext, imagePrefix, bitmap);
+         return RNWidgetImageProvider.getImageUri(appContext, fileName);
+     }

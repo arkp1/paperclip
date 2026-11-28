@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ShareIntentRouter } from "@/features/save-link/components/ShareIntentRouter";
 import { ReaderAudioHost } from "@/features/reader/audio/ReaderAudioHost";
 import { ReaderAudioProvider } from "@/features/reader/audio/ReaderAudioProvider";
+import { WidgetRefreshBridge } from "@/features/widgets/WidgetRefreshBridge";
 import { DatabaseGate } from "@/shared/ui/DatabaseGate";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { installSafeConsole } from "@/shared/utils/safeLog";
@@ -45,6 +46,7 @@ export default function RootLayout() {
               <ReaderAudioProvider>
                 <View style={{ flex: 1 }}>
                   <ShareIntentRouter />
+                  <WidgetRefreshBridge />
                   <ThemedNavigator />
                 </View>
               </ReaderAudioProvider>
