@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, FlatList, RefreshControl, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
 import { useRouter } from "expo-router";
 
 import { BookmarkCard } from "@/features/bookmarks/components/BookmarkCard";

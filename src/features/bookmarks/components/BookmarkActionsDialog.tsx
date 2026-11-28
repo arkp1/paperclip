@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { Alert, Platform, Share, ToastAndroid, View } from "react-native";
+import { Platform, Share, View } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 
@@ -127,7 +130,7 @@ export function BookmarkActionsDialog({
       haptics.light();
       closeAll();
       if (Platform.OS === "android" && Number(Platform.Version) < 33) {
-        ToastAndroid.show("Link copied", ToastAndroid.SHORT);
+        appSnackbar.show("Link copied");
       }
     } catch {
       Alert.alert("Could not copy the link", "Please try again.");
@@ -176,7 +179,7 @@ export function BookmarkActionsDialog({
     try {
       await deleteBookmarkWithAssets(bookmark.id);
       haptics.success();
-      ToastAndroid.show("Link deleted", ToastAndroid.SHORT);
+      appSnackbar.show("Link deleted");
       onChanged();
       closeAll();
     } catch {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, FlatList } from "react-native";
+import { FlatList } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
 import { useRouter } from "expo-router";
 
 import {

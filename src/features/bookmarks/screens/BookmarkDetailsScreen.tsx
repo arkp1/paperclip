@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { ScrollView, ToastAndroid, View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { usePrivateSpaceSession } from "@/core/security/privateSpaceSession";
 
@@ -12,6 +12,7 @@ import { useReaderAudioInset } from "@/features/reader/audio/ReaderAudioProvider
 import { resolvePreviewImageUri } from "@/core/files/previewFileStore";
 import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { navigateBack } from "@/shared/navigation/navigateBack";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import { haptics } from "@/shared/utils/haptics";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -176,7 +177,7 @@ export function BookmarkDetailsScreen({
                 onPress={() => {
                   void Clipboard.setStringAsync(bookmark.originalUrl).then(() => {
                     haptics.light();
-                    ToastAndroid.show("Link copied", ToastAndroid.SHORT);
+                    appSnackbar.show("Link copied");
                   });
                 }}
               />

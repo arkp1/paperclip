@@ -17,6 +17,8 @@ import { ReaderAudioHost } from "@/features/reader/audio/ReaderAudioHost";
 import { ReaderAudioProvider } from "@/features/reader/audio/ReaderAudioProvider";
 import { WidgetRefreshBridge } from "@/features/widgets/WidgetRefreshBridge";
 import { DatabaseGate } from "@/shared/ui/DatabaseGate";
+import { AppAlertHost } from "@/shared/ui/appAlert";
+import { AppSnackbarHost } from "@/shared/ui/appSnackbar";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { installSafeConsole } from "@/shared/utils/safeLog";
 import { ThemeProvider, useTheme } from "@/theme";
@@ -40,6 +42,8 @@ export default function RootLayout() {
       <ShareIntentProvider options={{ resetOnBackground: true }}>
         <SafeAreaProvider>
           <ThemeProvider>
+            <AppAlertHost />
+            <AppSnackbarHost />
             <DatabaseGate>
               <ReaderAudioProvider>
                 <View style={{ flex: 1 }}>

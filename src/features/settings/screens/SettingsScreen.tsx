@@ -3,7 +3,9 @@ import { semantics } from "@expo/ui/jetpack-compose/modifiers";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
 
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";

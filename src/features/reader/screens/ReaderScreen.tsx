@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  Alert,
   BackHandler,
   FlatList,
   LayoutAnimation,
@@ -17,7 +16,6 @@ import {
   ScrollView,
   Share,
   Text,
-  ToastAndroid,
   UIManager,
   useWindowDimensions,
   View,
@@ -79,6 +77,8 @@ import { LoadingState } from "@/shared/ui/LoadingState";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
 import { haptics } from "@/shared/utils/haptics";
 import { Screen } from "@/shared/ui/Screen";
+import { appAlert as Alert } from "@/shared/ui/appAlert";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
 import { styles } from "@/styles/features/reader/ReaderScreen.styles";
@@ -432,10 +432,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       void rememberReaderFallbackDomain(bookmark.originalUrl);
       void openExternalUrl(bookmark.originalUrl).then(() => {
         if (Platform.OS === "android") {
-          ToastAndroid.show(
-            "Reader view unavailable — opened the original",
-            ToastAndroid.SHORT
-          );
+          appSnackbar.show("Reader view unavailable — opened the original");
         }
       });
       navigateBack(router);

@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
-import { Alert, FlatList, RefreshControl, ToastAndroid, View } from "react-native";
+import { FlatList, RefreshControl, View } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import { useRouter } from "expo-router";
 
 import { useCollectionCounts } from "@/features/bookmarks/hooks/useCollectionCounts";
@@ -64,7 +67,7 @@ export function FoldersScreen() {
     try {
       await create(name, colorKey);
       haptics.success();
-      ToastAndroid.show("Folder created", ToastAndroid.SHORT);
+      appSnackbar.show("Folder created");
       return null;
     } catch (error) {
       return describeFolderError(error);
@@ -93,7 +96,7 @@ export function FoldersScreen() {
     }
     await remove(deleteTarget.id, strategy);
     haptics.success();
-    ToastAndroid.show("Folder deleted", ToastAndroid.SHORT);
+    appSnackbar.show("Folder deleted");
   };
 
   const handleMakePrivate = async (folder: Folder) => {

@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { ToastAndroid } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 
@@ -7,6 +6,7 @@ import { quickSaveLink } from "@/features/save-link/services/quickSaveService";
 import { extractSharedUrl } from "@/features/save-link/utils/sharePayload";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { Screen } from "@/shared/ui/Screen";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import { validateHttpUrl } from "@/shared/utils/url";
 
 /**
@@ -23,7 +23,7 @@ export default function ClipboardSaveScreen() {
         const url = extractSharedUrl(text);
         if (!validateHttpUrl(url).valid) {
           if (!cancelled) {
-            ToastAndroid.show("No link in clipboard", ToastAndroid.SHORT);
+            appSnackbar.show("No link in clipboard");
             router.replace("/");
           }
           return;
@@ -32,15 +32,14 @@ export default function ClipboardSaveScreen() {
         if (cancelled) {
           return;
         }
-        ToastAndroid.show(
-          result.status === "duplicate" ? "Already saved" : "Link saved",
-          ToastAndroid.SHORT
+        appSnackbar.show(
+          result.status === "duplicate" ? "Already saved" : "Link saved"
         );
         router.replace("/");
       })
       .catch(() => {
         if (!cancelled) {
-          ToastAndroid.show("Could not read the clipboard", ToastAndroid.SHORT);
+          appSnackbar.show("Could not read the clipboard");
           router.replace("/");
         }
       });

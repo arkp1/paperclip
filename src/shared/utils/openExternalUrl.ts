@@ -1,4 +1,6 @@
-import { Alert, Linking, Share } from "react-native";
+import { Linking, Share } from "react-native";
+
+import { appAlert as Alert } from "@/shared/ui/appAlert";
 
 import { validateHttpUrl } from "@/shared/utils/url";
 

@@ -5,7 +5,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ToastAndroid,
   View,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -29,6 +28,7 @@ import {
 import { openBookmarkDestination } from "@/features/bookmarks/utils/openBookmarkDestination";
 import { navigateBack } from "@/shared/navigation/navigateBack";
 import { haptics } from "@/shared/utils/haptics";
+import { appSnackbar } from "@/shared/ui/appSnackbar";
 import { AppDialog } from "@/shared/ui/AppDialog";
 import { AppText } from "@/shared/ui/AppText";
 import { Button } from "@/shared/ui/Button";
@@ -220,8 +220,7 @@ export function SaveLinkScreen({
       void cacheArticleInBackground(saved.id);
       emitBookmarkChanged(saved.id);
       haptics.success();
-      ToastAndroid.show("Link saved", ToastAndroid.SHORT);
-
+      appSnackbar.show("Link saved");
       if (onSaved) {
         onSaved(folderId);
         return;

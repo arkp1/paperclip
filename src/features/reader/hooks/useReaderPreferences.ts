@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { appAlert as Alert } from "@/shared/ui/appAlert";
 
 import {
   getSetting,
