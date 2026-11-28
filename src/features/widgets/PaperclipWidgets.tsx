@@ -15,22 +15,76 @@ const palette = {
   light: {
     background: "#F7F4EE",
     surface: "#FFFEFA",
+    surfaceMuted: "#ECE7DE",
+    border: "#DED7CD",
     text: "#1C1B1F",
     muted: "#625B71",
     primary: "#5B4B8A",
+    onPrimary: "#FFFFFF",
   },
   dark: {
     background: "#1B1922",
     surface: "#252331",
+    surfaceMuted: "#302C3C",
+    border: "#3A3547",
     text: "#E7E1E9",
     muted: "#B9B3C4",
     primary: "#CBBEFF",
+    onPrimary: "#1B1922",
   },
 } as const;
 
 const openUri = (id: string) => `paperclip://bookmarks/${encodeURIComponent(id)}`;
+const CLIPBOARD_SAVE_URI = "paperclip://clipboard-save";
 
-function EmptyState({ theme }: { theme: WidgetTheme }) {
+function PasteButton({
+  theme,
+  compact = false,
+}: {
+  theme: WidgetTheme;
+  compact?: boolean;
+}) {
+  const colors = palette[theme];
+  return (
+    <FlexWidget
+      clickAction="OPEN_URI"
+      clickActionData={{ uri: CLIPBOARD_SAVE_URI }}
+      accessibilityLabel="Paste a link from the clipboard"
+      style={{
+        width: "match_parent",
+        height: compact ? 30 : 34,
+        backgroundColor: colors.primary,
+        borderRadius: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        flexGap: 5,
+        paddingHorizontal: 10,
+      }}
+    >
+      <TextWidget
+        text="+"
+        style={{ fontSize: compact ? 14 : 16, fontWeight: "700", color: colors.onPrimary }}
+      />
+      <TextWidget
+        text="Paste link"
+        style={{
+          fontSize: compact ? 10 : 11,
+          fontWeight: "600",
+          color: colors.onPrimary,
+        }}
+      />
+    </FlexWidget>
+  );
+}
+
+function EmptyState({
+  theme,
+  showPaste = true,
+}: {
+  theme: WidgetTheme;
+  showPaste?: boolean;
+}) {
   const colors = palette[theme];
   return (
     <FlexWidget
@@ -38,13 +92,26 @@ function EmptyState({ theme }: { theme: WidgetTheme }) {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
-        padding: 12,
+        flexGap: 5,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
       }}
     >
       <TextWidget
-        text="No saved links yet"
-        style={{ fontSize: 13, color: colors.muted }}
+        text="Nothing saved yet"
+        maxLines={1}
+        style={{ fontSize: 12, fontWeight: "600", color: colors.text }}
       />
+      <TextWidget
+        text="Save a link from any app"
+        maxLines={1}
+        style={{ fontSize: 10, color: colors.muted, textAlign: "center" }}
+      />
+      {showPaste ? (
+        <FlexWidget style={{ width: 128, marginTop: 2 }}>
+          <PasteButton theme={theme} compact />
+        </FlexWidget>
+      ) : null}
     </FlexWidget>
   );
 }
@@ -63,38 +130,37 @@ export function PaperclipSmallWidget({
         height: "match_parent",
         width: "match_parent",
         backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderWidth: 1,
         borderRadius: 22,
-        padding: 14,
+        padding: 12,
         flexDirection: "column",
         justifyContent: "space-between",
       }}
     >
-      <FlexWidget style={{ flexDirection: "column" }}>
+      <FlexWidget style={{ flexDirection: "column", flexGap: 1 }}>
         <TextWidget
           text={String(data.total)}
-          style={{ fontSize: 30, color: colors.text }}
+          maxLines={1}
+          style={{
+            fontSize: 32,
+            lineHeight: 34,
+            fontWeight: "700",
+            color: colors.text,
+            adjustsFontSizeToFit: true,
+          }}
         />
         <TextWidget
-          text="saved links"
-          style={{ fontSize: 12, color: colors.muted }}
+          text={data.total === 1 ? "saved link" : "saved links"}
+          maxLines={1}
+          style={{
+            fontSize: 10,
+            letterSpacing: 0.6,
+            color: colors.muted,
+          }}
         />
       </FlexWidget>
-      <FlexWidget
-        clickAction="OPEN_URI"
-        clickActionData={{ uri: "paperclip://clipboard-save" }}
-        style={{
-          backgroundColor: colors.primary,
-          borderRadius: 18,
-          paddingVertical: 7,
-          paddingHorizontal: 10,
-          alignItems: "center",
-        }}
-      >
-        <TextWidget
-          text="+ Paste link"
-          style={{ fontSize: 12, color: theme === "dark" ? "#1B1922" : "#FFFFFF" }}
-        />
-      </FlexWidget>
+      <PasteButton theme={theme} />
     </FlexWidget>
   );
 }
@@ -113,15 +179,33 @@ export function PaperclipMediumWidget({
         height: "match_parent",
         width: "match_parent",
         backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderWidth: 1,
         borderRadius: 22,
-        padding: 14,
+        padding: 12,
         flexDirection: "column",
       }}
     >
-      <TextWidget
-        text="Recent links"
-        style={{ fontSize: 13, color: colors.primary }}
-      />
+      <FlexWidget
+        style={{
+          width: "match_parent",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 7,
+        }}
+      >
+        <TextWidget
+          text="Recent links"
+          maxLines={1}
+          style={{ fontSize: 13, fontWeight: "700", color: colors.text }}
+        />
+        <TextWidget
+          text={`${data.total} saved`}
+          maxLines={1}
+          style={{ fontSize: 10, color: colors.muted }}
+        />
+      </FlexWidget>
       {data.bookmarks.length === 0 ? (
         <EmptyState theme={theme} />
       ) : (
@@ -137,23 +221,42 @@ export function PaperclipMediumWidget({
               key={bookmark.id}
               clickAction="OPEN_URI"
               clickActionData={{ uri: openUri(bookmark.id) }}
+              accessibilityLabel={`${bookmark.title}, ${bookmark.source}`}
               style={{
                 width: "match_parent",
-                height: 42,
-                flexDirection: "column",
-                justifyContent: "center",
-                paddingHorizontal: 2,
+                height: 48,
+                backgroundColor: colors.surface,
+                borderRadius: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 9,
+                marginBottom: 4,
               }}
             >
+              <FlexWidget
+                style={{ flex: 1, flexDirection: "column", justifyContent: "center" }}
+              >
+                <TextWidget
+                  text={bookmark.title}
+                  maxLines={1}
+                  truncate="END"
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 15,
+                    fontWeight: "600",
+                    color: colors.text,
+                  }}
+                />
+                <TextWidget
+                  text={bookmark.source}
+                  maxLines={1}
+                  truncate="END"
+                  style={{ fontSize: 9.5, lineHeight: 12, color: colors.muted }}
+                />
+              </FlexWidget>
               <TextWidget
-                text={bookmark.title}
-                maxLines={1}
-                style={{ fontSize: 13, color: colors.text }}
-              />
-              <TextWidget
-                text={bookmark.source}
-                maxLines={1}
-                style={{ fontSize: 11, color: colors.muted }}
+                text="›"
+                style={{ fontSize: 17, color: colors.muted, marginLeft: 6 }}
               />
             </FlexWidget>
           ))}
@@ -177,15 +280,41 @@ export function PaperclipLargeWidget({
         height: "match_parent",
         width: "match_parent",
         backgroundColor: colors.background,
+        borderColor: colors.border,
+        borderWidth: 1,
         borderRadius: 22,
         padding: 12,
         flexDirection: "column",
       }}
     >
-      <TextWidget
-        text={`${data.total} saved links`}
-        style={{ fontSize: 14, color: colors.primary, paddingBottom: 6 }}
-      />
+      <FlexWidget
+        style={{
+          width: "match_parent",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 8,
+        }}
+      >
+        <TextWidget
+          text="Recent links"
+          maxLines={1}
+          style={{ fontSize: 14, fontWeight: "700", color: colors.text }}
+        />
+        <TextWidget
+          text={`${data.total} saved`}
+          maxLines={1}
+          style={{
+            fontSize: 9.5,
+            fontWeight: "600",
+            color: colors.primary,
+            backgroundColor: colors.surface,
+            borderRadius: 10,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+          }}
+        />
+      </FlexWidget>
       {data.bookmarks.length === 0 ? (
         <EmptyState theme={theme} />
       ) : (
@@ -201,52 +330,69 @@ export function PaperclipLargeWidget({
               key={bookmark.id}
               clickAction="OPEN_URI"
               clickActionData={{ uri: openUri(bookmark.id) }}
+              accessibilityLabel={`${bookmark.title}, ${bookmark.source}`}
               style={{
                 width: "match_parent",
-                height: 54,
+                height: 58,
                 flexDirection: "row",
                 alignItems: "center",
-                paddingHorizontal: 2,
+                paddingHorizontal: 4,
+                marginBottom: 4,
               }}
             >
               <FlexWidget
                 style={{
-                  width: 34,
-                  height: 34,
+                  width: 38,
+                  height: 38,
                   borderRadius: 10,
-                  backgroundColor: colors.surface,
+                  backgroundColor: colors.surfaceMuted,
                   justifyContent: "center",
                   alignItems: "center",
-                  marginRight: 10,
+                  marginRight: 9,
+                  overflow: "hidden",
                 }}
               >
                 {bookmark.thumbnail ? (
                   <ImageWidget
                     image={bookmark.thumbnail}
-                    imageWidth={34}
-                    imageHeight={34}
+                    imageWidth={38}
+                    imageHeight={38}
                     radius={10}
                     resizeMode="cover"
                   />
                 ) : (
                   <TextWidget
                     text={bookmark.title.slice(0, 1).toUpperCase()}
-                    style={{ fontSize: 15, color: colors.primary }}
+                    maxLines={1}
+                    style={{ fontSize: 15, fontWeight: "700", color: colors.primary }}
                   />
                 )}
               </FlexWidget>
-              <FlexWidget style={{ flex: 1, flexDirection: "column" }}>
+              <FlexWidget
+                style={{ flex: 1, flexDirection: "column", justifyContent: "center" }}
+              >
                 <TextWidget
                   text={bookmark.title}
-                  maxLines={1}
-                  style={{ fontSize: 13, color: colors.text }}
+                  maxLines={2}
+                  truncate="END"
+                  style={{
+                    fontSize: 12.5,
+                    lineHeight: 15,
+                    fontWeight: "600",
+                    color: colors.text,
+                  }}
                 />
                 <TextWidget
                   text={bookmark.source}
                   maxLines={1}
-                  style={{ fontSize: 11, color: colors.muted }}
+                  truncate="END"
+                  style={{ fontSize: 9.5, lineHeight: 12, color: colors.muted }}
                 />
               </FlexWidget>
+              <TextWidget
+                text="›"
+                style={{ fontSize: 17, color: colors.muted, marginLeft: 4 }}
+              />
             </FlexWidget>
           ))}
         </ListWidget>
