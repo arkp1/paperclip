@@ -184,10 +184,26 @@ export function BookmarkActionsDialog({
       closeAll();
     } catch {
       haptics.error();
+      Alert.alert("Delete", "Could not delete this link.");
       setError("Could not delete this link.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const confirmDelete = () => {
+    setError(null);
+    Alert.alert("Delete this link?", undefined, [
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          closeAll();
+          void removeBookmark();
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const isActionsMode = mode === "actions";
@@ -283,7 +299,7 @@ export function BookmarkActionsDialog({
                   destructive
                   onPress={() => {
                     setError(null);
-                    setMode("delete");
+                    confirmDelete();
                   }}
                 />
                 {error ? (
