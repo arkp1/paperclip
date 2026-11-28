@@ -22,8 +22,6 @@ import { deletePreviewImage } from "@/core/files/previewFileStore";
 import {
   PUBLIC_BOOKMARK_TRANSFER_FILTER,
   completeBookmarkTransfer,
-  getBookmarkTransfer,
-  isBookmarkPendingPrivate,
   isFolderPendingPrivate,
 } from "@/core/database/vaultTransferState";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
@@ -306,26 +304,35 @@ export async function createBookmark(input: CreateBookmarkInput): Promise<Bookma
   const id = createId();
   const now = Date.now();
 
-  await database.runAsync(
-    `INSERT INTO bookmarks
-       (id, original_url, canonical_url, title, title_is_user_edited, description,
-        note, folder_id, source_name, domain, preview_image_path, favicon_path,
-        preview_status, preview_fetched_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)`,
-    id,
-    input.originalUrl,
-    input.canonicalUrl,
-    input.title,
-    input.titleIsUserEdited ? 1 : 0,
-    input.description,
-    input.note,
-    input.folderId,
-    input.sourceName,
-    input.domain,
-    input.previewStatus,
-    now,
-    now
-  );
+  try {
+    await database.runAsync(
+      `INSERT INTO bookmarks
+         (id, normalized_url, original_url, canonical_url, title, title_is_user_edited, description,
+          note, folder_id, source_name, domain, preview_image_path, favicon_path,
+          preview_status, preview_fetched_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?, ?)`,
+      id,
+      normalizeUrlForComparison(input.originalUrl),
+      input.originalUrl,
+      input.canonicalUrl,
+      input.title,
+      input.titleIsUserEdited ? 1 : 0,
+      input.description,
+      input.note,
+      input.folderId,
+      input.sourceName,
+      input.domain,
+      input.previewStatus,
+      now,
+      now
+    );
+  } catch (error) {
+    const existing = await findBookmarkByUrl(input.originalUrl);
+    if (existing) {
+      return existing;
+    }
+    throw error;
+  }
 
   const bookmark = await getBookmarkById(id);
   if (!bookmark) {
@@ -358,30 +365,14 @@ export async function getBookmarkById(id: string): Promise<Bookmark | null> {
 export async function findBookmarkByUrl(rawUrl: string): Promise<Bookmark | null> {
   const database = await getDatabase();
   const normalized = normalizeUrlForComparison(rawUrl);
-  const pageSize = 500;
-  let offset = 0;
-
-  while (true) {
-    const rows = await database.getAllAsync<BookmarkRow>(
-      `${BOOKMARK_SELECT}
-       WHERE ${PUBLIC_BOOKMARKS_FILTER}
-       ORDER BY b.created_at DESC, b.id DESC
-       LIMIT ? OFFSET ?`,
-      pageSize,
-      offset
-    );
-
-    const match = rows.find(
-      (row) => normalizeUrlForComparison(row.originalUrl) === normalized
-    );
-    if (match) {
-      return mapBookmarkRow(match);
-    }
-    if (rows.length < pageSize) {
-      return null;
-    }
-    offset += pageSize;
-  }
+  const row = await database.getFirstAsync<BookmarkRow>(
+    `${BOOKMARK_SELECT}
+     WHERE ${PUBLIC_BOOKMARKS_FILTER}
+       AND b.normalized_url = ?
+     LIMIT 1`,
+    normalized
+  );
+  return row ? mapBookmarkRow(row) : null;
 }
 
 export async function setBookmarkFavorite(
@@ -622,7 +613,8 @@ export async function deleteBookmark(id: string): Promise<void> {
   });
 }
 
-export async function searchPublicBookmarks(  rawQuery: string,
+export async function searchPublicBookmarks(
+  rawQuery: string,
   limit = 60
 ): Promise<BookmarkView[]> {
   const query = rawQuery.trim();
@@ -630,8 +622,30 @@ export async function searchPublicBookmarks(  rawQuery: string,
     return [];
   }
 
-  const pattern = `%${escapeLikePattern(query)}%`;
   const database = await getDatabase();
+  if (query.length >= 3 && (await hasBookmarkFts(database))) {
+    const phrase = `"${query.replace(/"/g, '""')}"`;
+    try {
+      const rows = await database.getAllAsync<BookmarkListRow>(
+        `${BOOKMARK_SELECT}
+         JOIN bookmark_search bs ON bs.bookmark_id = b.id
+         WHERE ${PUBLIC_BOOKMARKS_FILTER}
+           AND bookmark_search MATCH ?
+         ORDER BY bm25(bookmark_search), b.created_at DESC
+         LIMIT ?`,
+        phrase,
+        limit
+      );
+      return rows.map((row) => ({
+        ...mapBookmarkRow(row),
+        folderName: row.folderName,
+      }));
+    } catch {
+      // A missing or malformed FTS index must not break search.
+    }
+  }
+
+  const pattern = `%${escapeLikePattern(query)}%`;
 
   const rows = await database.getAllAsync<BookmarkListRow>(
     `${BOOKMARK_SELECT}
@@ -660,4 +674,19 @@ export async function searchPublicBookmarks(  rawQuery: string,
 
 function escapeLikePattern(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+let bookmarkFtsAvailable: boolean | null = null;
+
+async function hasBookmarkFts(
+  database: Awaited<ReturnType<typeof getDatabase>>
+): Promise<boolean> {
+  if (bookmarkFtsAvailable !== null) {
+    return bookmarkFtsAvailable;
+  }
+  const row = await database.getFirstAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'bookmark_search'"
+  );
+  bookmarkFtsAvailable = Boolean(row);
+  return bookmarkFtsAvailable;
 }

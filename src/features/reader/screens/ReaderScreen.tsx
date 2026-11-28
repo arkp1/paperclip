@@ -223,6 +223,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     alt: string;
   } | null>(null);
   const [readingProgress, setReadingProgress] = useState(0);
+  const lastUiProgress = useRef(0);
+  const lastUiProgressAt = useRef(0);
   const [completed, setCompleted] = useState(false);
   const [progressHydrated, setProgressHydrated] = useState(false);
   const [progressReloadToken, setProgressReloadToken] = useState(0);
@@ -611,7 +613,15 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       0,
       Math.min(1, event.nativeEvent.contentOffset.y / maxOffset)
     );
-    setReadingProgress(progress);
+    const now = Date.now();
+    if (
+      Math.abs(progress - lastUiProgress.current) >= 0.01 ||
+      now - lastUiProgressAt.current >= 100
+    ) {
+      lastUiProgress.current = progress;
+      lastUiProgressAt.current = now;
+      setReadingProgress(progress);
+    }
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
     }

@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
+import { normalizeUrlForComparison } from "@/shared/utils/url";
+
 const INITIAL_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS folders (
     id TEXT PRIMARY KEY NOT NULL,
@@ -71,6 +73,7 @@ type Migration = {
   version: number;
   name: string;
   sql: string;
+  after?: (database: SQLiteDatabase) => Promise<void>;
 };
 
 const migrations: Migration[] = [
@@ -136,6 +139,115 @@ const migrations: Migration[] = [
         ON vault_transfers(target, entity_type);
     `,
   },
+  {
+    version: 6,
+    name: "normalized_bookmark_urls",
+    sql: `
+      ALTER TABLE bookmarks ADD COLUMN normalized_url TEXT;
+    `,
+    after: async (database) => {
+      const rows = await database.getAllAsync<{
+        id: string;
+        originalUrl: string;
+      }>(
+        `SELECT id, original_url AS originalUrl
+         FROM bookmarks
+         ORDER BY created_at ASC, id ASC`
+      );
+      const seen = new Set<string>();
+      for (const row of rows) {
+        const normalized = normalizeUrlForComparison(row.originalUrl);
+        if (seen.has(normalized)) {
+          // Preserve the legacy duplicate row while keeping the unique
+          // comparison index valid.
+          continue;
+        }
+        seen.add(normalized);
+        await database.runAsync(
+          "UPDATE bookmarks SET normalized_url = ? WHERE id = ?",
+          normalized,
+          row.id
+        );
+      }
+      await database.execAsync(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_normalized_url
+          ON bookmarks(normalized_url)
+          WHERE normalized_url IS NOT NULL;
+      `);
+    },
+  },
+  {
+    version: 7,
+    name: "bookmark_fts",
+    sql: "SELECT 1;",
+    after: async (database) => {
+      const options = await database.getAllAsync<{ compile_options: string }>(
+        "PRAGMA compile_options"
+      );
+      if (!options.some((option) => option.compile_options.includes("FTS5"))) {
+        return;
+      }
+      try {
+        await database.execAsync(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS bookmark_search USING fts5(
+            bookmark_id UNINDEXED,
+            title,
+            original_url,
+            domain,
+            description,
+            note,
+            folder_name,
+            tokenize = 'trigram'
+          );
+          CREATE TRIGGER IF NOT EXISTS bookmark_search_insert
+          AFTER INSERT ON bookmarks BEGIN
+            INSERT INTO bookmark_search
+              (bookmark_id, title, original_url, domain, description, note, folder_name)
+            VALUES (new.id, new.title, new.original_url, COALESCE(new.domain, ''),
+              COALESCE(new.description, ''), COALESCE(new.note, ''),
+              COALESCE((SELECT name FROM folders WHERE id = new.folder_id), ''));
+          END;
+          CREATE TRIGGER IF NOT EXISTS bookmark_search_update
+          AFTER UPDATE ON bookmarks BEGIN
+            DELETE FROM bookmark_search WHERE bookmark_id = old.id;
+            INSERT INTO bookmark_search
+              (bookmark_id, title, original_url, domain, description, note, folder_name)
+            VALUES (new.id, new.title, new.original_url, COALESCE(new.domain, ''),
+              COALESCE(new.description, ''), COALESCE(new.note, ''),
+              COALESCE((SELECT name FROM folders WHERE id = new.folder_id), ''));
+          END;
+          CREATE TRIGGER IF NOT EXISTS bookmark_search_delete
+          AFTER DELETE ON bookmarks BEGIN
+            DELETE FROM bookmark_search WHERE bookmark_id = old.id;
+          END;
+          CREATE TRIGGER IF NOT EXISTS folder_search_update
+          AFTER UPDATE OF name ON folders BEGIN
+            UPDATE bookmark_search
+            SET folder_name = new.name
+            WHERE bookmark_id IN (SELECT id FROM bookmarks WHERE folder_id = new.id);
+          END;
+        `);
+        await database.execAsync(`
+          INSERT INTO bookmark_search
+            (bookmark_id, title, original_url, domain, description, note, folder_name)
+          SELECT b.id, b.title, b.original_url, COALESCE(b.domain, ''),
+            COALESCE(b.description, ''), COALESCE(b.note, ''),
+            COALESCE(f.name, '')
+          FROM bookmarks b
+          LEFT JOIN folders f ON f.id = b.folder_id;
+        `);
+      } catch {
+        // FTS5/trigram is optional. Search falls back to LIKE.
+        await database.execAsync(`
+          DROP TRIGGER IF EXISTS bookmark_search_insert;
+          DROP TRIGGER IF EXISTS bookmark_search_update;
+          DROP TRIGGER IF EXISTS bookmark_search_delete;
+          DROP TRIGGER IF EXISTS folder_search_update;
+          DROP TABLE IF EXISTS bookmark_search;
+        `);
+      }
+    },
+  },
 ];
 
 /**
@@ -156,6 +268,7 @@ export async function runMigrations(database: SQLiteDatabase): Promise<void> {
 
     await database.withTransactionAsync(async () => {
       await database.execAsync(migration.sql);
+      await migration.after?.(database);
       await database.execAsync(`PRAGMA user_version = ${migration.version}`);
     });
 
