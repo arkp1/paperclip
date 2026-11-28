@@ -41,7 +41,6 @@ export function BookmarkDetailsScreen({
 
   useEffect(() => {
     if (isPrivate && !isUnlocked) {
-      setActionsVisible(false);
       navigateBack(router);
     }
   }, [isPrivate, isUnlocked, router]);
