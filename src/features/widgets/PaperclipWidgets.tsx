@@ -182,7 +182,7 @@ export function PaperclipMediumWidget({
         borderColor: colors.border,
         borderWidth: 1,
         borderRadius: 22,
-        padding: 12,
+        padding: 14,
         flexDirection: "column",
       }}
     >
@@ -192,7 +192,7 @@ export function PaperclipMediumWidget({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 7,
+          marginBottom: 9,
         }}
       >
         <TextWidget
@@ -224,25 +224,25 @@ export function PaperclipMediumWidget({
               accessibilityLabel={`${bookmark.title}, ${bookmark.source}`}
               style={{
                 width: "match_parent",
-                height: 48,
+                height: 52,
                 backgroundColor: colors.surface,
                 borderRadius: 12,
                 flexDirection: "row",
                 alignItems: "center",
-                paddingHorizontal: 9,
-                marginBottom: 4,
+                paddingHorizontal: 10,
+                marginBottom: 6,
               }}
             >
               <FlexWidget
-                style={{ flex: 1, flexDirection: "column", justifyContent: "center" }}
+                style={{ flex: 1, flexDirection: "column", justifyContent: "center", flexGap: 2 }}
               >
                 <TextWidget
                   text={bookmark.title}
                   maxLines={1}
                   truncate="END"
                   style={{
-                    fontSize: 12,
-                    lineHeight: 15,
+                    fontSize: 12.5,
+                    lineHeight: 16,
                     fontWeight: "600",
                     color: colors.text,
                   }}
@@ -251,7 +251,7 @@ export function PaperclipMediumWidget({
                   text={bookmark.source}
                   maxLines={1}
                   truncate="END"
-                  style={{ fontSize: 9.5, lineHeight: 12, color: colors.muted }}
+                  style={{ fontSize: 10, lineHeight: 13, color: colors.muted }}
                 />
               </FlexWidget>
               <TextWidget
@@ -283,7 +283,7 @@ export function PaperclipLargeWidget({
         borderColor: colors.border,
         borderWidth: 1,
         borderRadius: 22,
-        padding: 12,
+        padding: 14,
         flexDirection: "column",
       }}
     >
@@ -293,7 +293,7 @@ export function PaperclipLargeWidget({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         <TextWidget
@@ -333,31 +333,31 @@ export function PaperclipLargeWidget({
               accessibilityLabel={`${bookmark.title}, ${bookmark.source}`}
               style={{
                 width: "match_parent",
-                height: 58,
+                height: 64,
                 flexDirection: "row",
                 alignItems: "center",
                 paddingHorizontal: 4,
-                marginBottom: 4,
+                marginBottom: 6,
               }}
             >
               <FlexWidget
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 11,
                   backgroundColor: colors.surfaceMuted,
                   justifyContent: "center",
                   alignItems: "center",
-                  marginRight: 9,
+                  marginRight: 10,
                   overflow: "hidden",
                 }}
               >
                 {bookmark.thumbnail ? (
                   <ImageWidget
                     image={bookmark.thumbnail}
-                    imageWidth={38}
-                    imageHeight={38}
-                    radius={10}
+                    imageWidth={40}
+                    imageHeight={40}
+                    radius={11}
                     resizeMode="cover"
                   />
                 ) : (
@@ -369,15 +369,15 @@ export function PaperclipLargeWidget({
                 )}
               </FlexWidget>
               <FlexWidget
-                style={{ flex: 1, flexDirection: "column", justifyContent: "center" }}
+                style={{ flex: 1, flexDirection: "column", justifyContent: "center", flexGap: 3 }}
               >
                 <TextWidget
                   text={bookmark.title}
                   maxLines={2}
                   truncate="END"
                   style={{
-                    fontSize: 12.5,
-                    lineHeight: 15,
+                    fontSize: 13,
+                    lineHeight: 17,
                     fontWeight: "600",
                     color: colors.text,
                   }}
@@ -386,7 +386,7 @@ export function PaperclipLargeWidget({
                   text={bookmark.source}
                   maxLines={1}
                   truncate="END"
-                  style={{ fontSize: 9.5, lineHeight: 12, color: colors.muted }}
+                  style={{ fontSize: 10, lineHeight: 13, color: colors.muted }}
                 />
               </FlexWidget>
               <TextWidget

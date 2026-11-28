@@ -2,6 +2,7 @@ import { validateHttpUrl } from "@/shared/utils/url";
 import { isSafeRemoteHttpUrl } from "@/shared/utils/safeRemoteUrl";
 import { fetchSafeRemote } from "@/shared/utils/safeFetch";
 import { readBoundedText } from "@/shared/utils/boundedResponse";
+import { githubRepositoryPreview } from "@/features/save-link/utils/githubPreview";
 
 export type LinkMetadata = {
   title: string | null;
@@ -53,6 +54,11 @@ export async function fetchLinkMetadata(rawUrl: string): Promise<LinkMetadata> {
     throw new MetadataUnavailableError("That destination is not allowed.");
   }
   const target = new URL(validation.url);
+
+  const githubPreview = githubRepositoryPreview(validation.url);
+  if (githubPreview) {
+    return githubPreview;
+  }
 
   if (isYouTubeHost(target.hostname)) {
     try {
