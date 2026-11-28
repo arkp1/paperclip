@@ -14,3 +14,17 @@ index a68fef1..adf8c36 100644
          String fileName = RNWidgetImageProvider.writeImage(appContext, imagePrefix, bitmap);
          return RNWidgetImageProvider.getImageUri(appContext, fileName);
      }
+diff --git a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
+index 4a8cf64..1f9c219 100644
+--- a/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
++++ b/node_modules/react-native-android-widget/android/src/main/java/com/reactnativeandroidwidget/RNWidgetCollectionService.java
+@@ -24,7 +24,8 @@ public class RNWidgetCollectionService extends RemoteViewsService {
+     public static final int MAX_COLLECTION_WIDGETS = 2;
+ 
+     public static List<String> storeCollection(ReactApplicationContext context, int widgetId, int collectionId, List<CollectionViewItem> collectionViewItems, String mode) {
+-        RNWidgetImageProvider.deleteCollectionImages(context, widgetId, collectionId, mode);
++        // Keep the previous collection images alive until RemoteViews swaps
++        // them, otherwise rows briefly flash while resizing.
+         List<String> imageNames = new ArrayList<>();
+         for (int i = 0; i < collectionViewItems.size(); i++) {
+             CollectionViewItem item = collectionViewItems.get(i);

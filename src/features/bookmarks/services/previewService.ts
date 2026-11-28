@@ -157,6 +157,7 @@ export async function refreshBookmarkPreview(bookmarkId: string): Promise<void> 
 export async function deleteBookmarkWithAssets(bookmarkId: string): Promise<void> {
   const bookmark = await getBookmarkById(bookmarkId);
   await deleteBookmark(bookmarkId);
+  emitBookmarkChanged(bookmarkId);
 
   if (bookmark?.previewImagePath) {
     deletePreviewImage(bookmark.previewImagePath);

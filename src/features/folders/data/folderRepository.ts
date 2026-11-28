@@ -19,6 +19,7 @@ import {
   PUBLIC_FOLDER_TRANSFER_FILTER,
 } from "@/core/database/vaultTransferState";
 import { deletePreviewImage } from "@/core/files/previewFileStore";
+import { emitBookmarkChanged } from "@/features/bookmarks/services/bookmarkEvents";
 import { isPrivateSpaceUnlocked } from "@/core/security/privateSpaceSession";
 import { createId } from "@/core/utils/id";
 import { isFolderColorKey, type FolderColorKey } from "@/theme/colors";
@@ -349,6 +350,7 @@ export async function deleteFolder(
         deletePreviewImage(row.previewImagePath);
       }
     }
+    emitBookmarkChanged(`folder:${id}`);
   });
 }
 
