@@ -10,6 +10,7 @@ import {
   removePendingCleanupFiles,
 } from "@/core/database/legacyPrivateDataCleanup";
 import { createId } from "@/core/utils/id";
+import { normalizeUrlForComparison } from "@/shared/utils/url";
 import {
   beginBookmarkTransfer,
   beginFolderTransfer,
@@ -489,14 +490,22 @@ async function copyVaultBookmarkToPublic(
     bookmark.previewDataUri,
     (relativePath) => restoredPreviewFiles.push(relativePath)
   );
+  const normalized = normalizeUrlForComparison(bookmark.originalUrl);
+  const existing = await main.getFirstAsync<{ id: string }>(
+    "SELECT id FROM bookmarks WHERE normalized_url = ?",
+    normalized
+  );
+  const normalizedUrl =
+    existing && existing.id !== bookmark.id ? null : normalized;
   await main.runAsync(
     `INSERT INTO bookmarks
-     (id, original_url, canonical_url, title, title_is_user_edited, description,
+     (id, original_url, normalized_url, canonical_url, title, title_is_user_edited, description,
       note, folder_id, source_name, domain, preview_image_path, favicon_path,
       preview_status, is_favorite, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        original_url = excluded.original_url,
+       normalized_url = excluded.normalized_url,
        canonical_url = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.canonical_url ELSE excluded.canonical_url END,
        title = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.title ELSE excluded.title END,
        title_is_user_edited = CASE WHEN bookmarks.updated_at > excluded.updated_at THEN bookmarks.title_is_user_edited ELSE excluded.title_is_user_edited END,
@@ -512,6 +521,7 @@ async function copyVaultBookmarkToPublic(
        updated_at = MAX(bookmarks.updated_at, excluded.updated_at)`,
     bookmark.id,
     bookmark.originalUrl,
+    normalizedUrl,
     bookmark.canonicalUrl,
     bookmark.title,
     bookmark.titleIsUserEdited,

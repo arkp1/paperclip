@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { useFonts } from "expo-font";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -92,6 +93,10 @@ type ReaderScreenProps = {
 export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const router = useRouter();
   const { theme } = useTheme();
+  const [readerFontsLoaded] = useFonts({
+    "NotoSerif-Regular": require("../../../../assets/fonts/NotoSerif-Variable.ttf"),
+    "JetBrainsMono-Regular": require("../../../../assets/fonts/JetBrainsMono-Variable.ttf"),
+  });
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -188,7 +193,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const { play: playAudio, clear: clearAudio } = useReaderAudio();
   const fallbackHandledRef = useRef(false);
   const palette = readerPalette(preferences.background);
-  const fontFamily = readerFontFamily(preferences.font);
+  const fontFamily = readerFontsLoaded
+    ? readerFontFamily(preferences.font)
+    : "GoogleSansFlex-Regular";
   const lineHeightMultiplier = readerLineHeightMultiplier(
     preferences.font,
     preferences.lineHeight
@@ -223,6 +230,8 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     alt: string;
   } | null>(null);
   const [readingProgress, setReadingProgress] = useState(0);
+  const lastUiProgress = useRef(0);
+  const lastUiProgressAt = useRef(0);
   const [completed, setCompleted] = useState(false);
   const [progressHydrated, setProgressHydrated] = useState(false);
   const [progressReloadToken, setProgressReloadToken] = useState(0);
@@ -611,7 +620,15 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       0,
       Math.min(1, event.nativeEvent.contentOffset.y / maxOffset)
     );
-    setReadingProgress(progress);
+    const now = Date.now();
+    if (
+      Math.abs(progress - lastUiProgress.current) >= 0.01 ||
+      now - lastUiProgressAt.current >= 100
+    ) {
+      lastUiProgress.current = progress;
+      lastUiProgressAt.current = now;
+      setReadingProgress(progress);
+    }
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
     }

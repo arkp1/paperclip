@@ -29,8 +29,6 @@ export default function RootLayout() {
     "GoogleSansFlex-Regular": require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
     GoogleSansFlex: require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
     "Google Sans Flex": require("../../assets/fonts/GoogleSansFlex-Variable.ttf"),
-    "NotoSerif-Regular": require("../../assets/fonts/NotoSerif-Variable.ttf"),
-    "JetBrainsMono-Regular": require("../../assets/fonts/JetBrainsMono-Variable.ttf"),
   });
 
   if (!fontsLoaded && !fontError) {

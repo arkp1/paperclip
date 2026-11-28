@@ -6,6 +6,7 @@ import {
   countPublicBookmarks,
   listPublicBookmarks,
 } from "@/features/bookmarks/data/bookmarkRepository";
+import { runWithConcurrency } from "@/shared/utils/runWithConcurrency";
 
 export type WidgetBookmark = {
   id: string;
@@ -33,17 +34,18 @@ export async function loadWidgetData(): Promise<WidgetData> {
       countPublicBookmarks("all"),
       listPublicBookmarks("all", 8, 0, "recent"),
     ]);
-    const data: WidgetData = {
-      total,
-      bookmarks: await Promise.all(
-        recent.map(async (bookmark) => ({
-          id: bookmark.id,
-          title: bookmark.title || bookmark.domain || "Saved link",
-          source: bookmark.domain ?? bookmark.sourceName ?? "Paperclip",
-          thumbnail: await readThumbnail(bookmark.previewImagePath),
-        }))
-      ),
-    };
+    const bookmarks: WidgetBookmark[] = recent.map((bookmark) => ({
+      id: bookmark.id,
+      title: bookmark.title || bookmark.domain || "Saved link",
+      source: bookmark.domain ?? bookmark.sourceName ?? "Paperclip",
+    }));
+    await runWithConcurrency(bookmarks, 3, async (bookmark) => {
+      const source = recent.find((candidate) => candidate.id === bookmark.id);
+      if (source) {
+        bookmark.thumbnail = await readThumbnail(source.previewImagePath);
+      }
+    });
+    const data: WidgetData = { total, bookmarks };
     cachedWidgetData = data;
     return data;
   } catch {
@@ -52,6 +54,22 @@ export async function loadWidgetData(): Promise<WidgetData> {
 }
 
 const MAX_WIDGET_THUMBNAIL_BYTES = 32_000;
+const thumbnailCache = new Map<string, `data:image${string}` | undefined>();
+const MAX_THUMBNAIL_CACHE_ENTRIES = 32;
+
+function rememberThumbnail(
+  relativePath: string,
+  value: `data:image${string}` | undefined
+): `data:image${string}` | undefined {
+  if (thumbnailCache.size >= MAX_THUMBNAIL_CACHE_ENTRIES) {
+    const oldest = thumbnailCache.keys().next().value;
+    if (oldest) {
+      thumbnailCache.delete(oldest);
+    }
+  }
+  thumbnailCache.set(relativePath, value);
+  return value;
+}
 
 async function readThumbnail(
   relativePath: string | null
@@ -59,10 +77,13 @@ async function readThumbnail(
   if (!relativePath) {
     return undefined;
   }
+  if (thumbnailCache.has(relativePath)) {
+    return thumbnailCache.get(relativePath);
+  }
   try {
     const uri = resolvePreviewImageUri(relativePath);
     if (!uri) {
-      return undefined;
+      return rememberThumbnail(relativePath, undefined);
     }
     const { manipulateAsync, SaveFormat } = await import(
       "expo-image-manipulator"
@@ -73,10 +94,13 @@ async function readThumbnail(
     });
     const file = new File(thumbnail.uri);
     if (!file.exists || file.size > MAX_WIDGET_THUMBNAIL_BYTES) {
-      return undefined;
+      return rememberThumbnail(relativePath, undefined);
     }
-    return `data:image/jpeg;base64,${await file.base64()}` as const;
+    return rememberThumbnail(
+      relativePath,
+      `data:image/jpeg;base64,${await file.base64()}` as const
+    );
   } catch {
-    return undefined;
+    return rememberThumbnail(relativePath, undefined);
   }
 }
