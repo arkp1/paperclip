@@ -32,9 +32,13 @@ export const appAlert = {
 
 export function AppAlertHost() {
   const [request, setRequest] = useState<AppAlertRequest | null>(null);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    listener = setRequest;
+    listener = (next) => {
+      setRequest(next);
+      setVisible(true);
+    };
     return () => {
       listener = null;
     };
@@ -43,22 +47,24 @@ export function AppAlertHost() {
   const buttons =
     request?.buttons && request.buttons.length > 0
       ? request.buttons
-      : [{ text: "OK", style: "default" as const }];
+      : request
+        ? [{ text: "OK", style: "default" as const }]
+        : [];
 
   const close = (button: AppAlertButton) => {
-    setRequest(null);
+    setVisible(false);
     button.onPress?.();
   };
 
   return (
     <AppDialog
-      visible={request !== null}
+      visible={visible}
       onRequestClose={() => {
         const cancel = buttons.find((button) => button.style === "cancel");
         if (cancel) {
           close(cancel);
         } else {
-          setRequest(null);
+          setVisible(false);
         }
       }}
       title={request?.title}
@@ -76,6 +82,7 @@ export function AppAlertHost() {
                     ? "text"
                     : "filled"
               }
+              disabled={!visible}
               onPress={() => close(button)}
             />
           ))}
