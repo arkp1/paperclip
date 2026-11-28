@@ -929,23 +929,19 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       return;
     }
     setActionsVisible(false);
-    Alert.alert(
-      "Delete this link?",
-      `“${bookmark.title}” will be removed from Paperclip.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            clearAudio();
-            void deleteBookmarkWithAssets(bookmark.id)
-              .then(() => navigateBack(router))
-              .catch(() => Alert.alert("Delete", "Could not delete this link."));
-          },
+    Alert.alert("Delete this link?", undefined, [
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          clearAudio();
+          void deleteBookmarkWithAssets(bookmark.id)
+            .then(() => navigateBack(router))
+            .catch(() => Alert.alert("Delete", "Could not delete this link."));
         },
-      ]
-    );
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const share = async () => {
