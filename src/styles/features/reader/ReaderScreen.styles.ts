@@ -43,7 +43,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing[6],
+    paddingHorizontal: spacing[4],
     paddingTop: spacing[4],
     paddingBottom: 148,
     gap: spacing[4],
