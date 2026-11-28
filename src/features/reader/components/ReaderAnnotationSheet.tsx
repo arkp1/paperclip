@@ -53,6 +53,7 @@ export function ReaderAnnotationSheet({
     <AppDialog
       visible={visible}
       onRequestClose={onClose}
+      presentation="bottom"
       title="Highlight paragraph"
       description="Save a colour and an optional note."
       actions={

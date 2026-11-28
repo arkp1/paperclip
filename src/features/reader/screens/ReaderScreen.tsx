@@ -24,6 +24,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useFonts } from "expo-font";
+import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -76,6 +77,7 @@ import { IconButton } from "@/shared/ui/IconButton";
 import type { MenuAnchor } from "@/shared/ui/MenuAnchor";
 import { LoadingState } from "@/shared/ui/LoadingState";
 import { useReducedMotion } from "@/shared/hooks/useReducedMotion";
+import { haptics } from "@/shared/utils/haptics";
 import { Screen } from "@/shared/ui/Screen";
 import { TopAppBar } from "@/shared/ui/TopAppBar";
 import { openExternalUrl } from "@/shared/utils/openExternalUrl";
@@ -793,6 +795,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
     setAnnotationKey(key);
     setAnnotationVisible(true);
     setAnnotateMode(false);
+    haptics.light();
   };
 
   const saveAnnotation = async (color: HighlightColor, note: string) => {
@@ -1197,7 +1200,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
       ) : null}
 
       {annotateMode ? (
-        <View
+        <Animated.View
+          entering={reduceMotion ? undefined : FadeInDown.duration(180)}
+          exiting={reduceMotion ? undefined : FadeOutUp.duration(120)}
           style={[
             styles.annotateBanner,
             {
@@ -1216,7 +1221,7 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
             onPress={() => setAnnotateMode(false)}
             color={palette.muted}
           />
-        </View>
+        </Animated.View>
       ) : null}
 
       <ReaderSearchBar

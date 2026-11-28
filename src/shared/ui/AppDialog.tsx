@@ -28,6 +28,7 @@ type AppDialogProps = {
   description?: string;
   children?: ReactNode;
   actions: ReactNode;
+  presentation?: "center" | "bottom";
 };
 
 export function AppDialog({
@@ -37,6 +38,7 @@ export function AppDialog({
   description,
   children,
   actions,
+  presentation = "center",
 }: AppDialogProps) {
   const { theme } = useTheme();
   const { colors, shapes } = theme;
@@ -96,8 +98,8 @@ export function AppDialog({
     return {
       opacity: value,
       transform: [
-        { translateY: (1 - value) * 16 },
-        { scale: 0.93 + value * 0.07 },
+        { translateY: (1 - value) * (presentation === "bottom" ? 52 : 16) },
+        { scale: presentation === "bottom" ? 0.97 + value * 0.03 : 0.93 + value * 0.07 },
       ],
     };
   });
