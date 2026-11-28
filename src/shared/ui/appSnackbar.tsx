@@ -56,7 +56,7 @@ export function AppSnackbarHost() {
       style={[
         styles.snackbar,
         {
-          bottom: insets.bottom + 96,
+          bottom: insets.bottom + 72,
           backgroundColor: theme.colors.inverseSurface,
         },
       ]}
