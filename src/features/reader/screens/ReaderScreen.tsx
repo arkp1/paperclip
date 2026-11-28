@@ -23,6 +23,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { useFonts } from "expo-font";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -92,6 +93,10 @@ type ReaderScreenProps = {
 export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const router = useRouter();
   const { theme } = useTheme();
+  const [readerFontsLoaded] = useFonts({
+    "NotoSerif-Regular": require("../../../../assets/fonts/NotoSerif-Variable.ttf"),
+    "JetBrainsMono-Regular": require("../../../../assets/fonts/JetBrainsMono-Variable.ttf"),
+  });
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -188,7 +193,9 @@ export function ReaderScreen({ bookmarkId }: ReaderScreenProps) {
   const { play: playAudio, clear: clearAudio } = useReaderAudio();
   const fallbackHandledRef = useRef(false);
   const palette = readerPalette(preferences.background);
-  const fontFamily = readerFontFamily(preferences.font);
+  const fontFamily = readerFontsLoaded
+    ? readerFontFamily(preferences.font)
+    : "GoogleSansFlex-Regular";
   const lineHeightMultiplier = readerLineHeightMultiplier(
     preferences.font,
     preferences.lineHeight
